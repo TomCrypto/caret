@@ -1,17 +1,64 @@
-SOURCES = src/main.nim $(shell find src/ -name '*.nim' -a ! -name 'main.nim')
+SRCDIR        := src
+OBJDIR        := obj
+BINDIR        := bin
 
-default: bin/image.elf
+RM            := rm -rf
+FIND          := find
 
-bin/image.elf: $(SOURCES)
-	nim c --path:src --gc:none -d:release --cpu:xtensa --os:standalone --noMain --nimcache:obj --out:$@ $<
+FIRMWARE      := caret.elf
+SEGMENT       := 0x*\.bin
 
-bin/0x00000.bin bin/0x40000.bin: bin/image.elf
-	esptool.py elf2image -o bin/ $<
+SOURCES       := $(shell $(FIND) $(SRCDIR)/ -name '*.nim')
+MAIN          := $(SRCDIR)/main.nim
+
+ifeq ($(filter $(MAIN),$(SOURCES)),)
+    $(error Source file '$(MAIN)' not found)
+endif
+
+# TODO: debug and testing flag
+
+NIM           := nim compile
+NIM_ARGS      := --path:$(SRCDIR) \
+                 --gc:none        \
+                 -d:release       \
+                 --cpu:xtensa     \
+                 --os:standalone  \
+                 --threads:off    \
+                 --skipUserCfg    \
+                 --nimcache:$(OBJDIR)
+
+# Hardware settings below
+
+DEVICE        ?= /dev/ttyUSB0
+BAUDRATE      ?= 1500000
+
+DEVICE_ARGS   := --port $(DEVICE) --baud $(BAUDRATE)
+FLASH_ARGS    := --flash_freq 40m \
+                 --flash_mode dio \
+                 --flash_size 32m
+
+ESPTOOL       := esptool.py
+ESP_PARSE     := $(ESPTOOL) $(DEVICE_ARGS) elf2image $(FLASH_ARGS)
+ESP_FLASH     := $(ESPTOOL) $(DEVICE_ARGS) write_flash $(FLASH_ARGS) --verify
+
+find_offsets   = $(patsubst $1/%.bin,%,$(shell $(FIND) $1/ -name $(SEGMENT)))
+get_segments   = $(foreach off,$(call find_offsets,$1),$(off) $1/$(off).bin)
+
+
+default: $(BINDIR)/$(FIRMWARE)
+
+
+$(BINDIR)/$(FIRMWARE): $(SOURCES)
+	$(NIM) $(NIM_ARGS) --out:$@ $(MAIN)
+
 
 .PHONY: upload
-upload: bin/0x00000.bin bin/0x40000.bin
-	esptool.py --port /dev/ttyUSB0 write_flash 0x00000 bin/0x00000.bin 0x40000 bin/0x40000.bin
+upload: $(BINDIR)/$(FIRMWARE)
+	$(RM) $(BINDIR)/$(SEGMENT); $(ESP_PARSE) -o $(BINDIR)/ $<
+	$(ESP_FLASH) $(call get_segments,$(BINDIR)) # uploading..
+
 
 .PHONY: clean
 clean:
-	rm -rf obj/* bin/*
+	$(RM) $(OBJDIR)/*
+	$(RM) $(BINDIR)/*

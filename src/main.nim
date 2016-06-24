@@ -1,17 +1,16 @@
 import gpio
 
-proc user_rf_pre_init*() {.extern: "user_rf_pre_init", codegenDecl: "$# __attribute__((section(\".irom0.text\"))) $#$#".} =
-    discard
-
-proc user_init*() {.extern: "user_init".} =
+proc main() =
     gpio.init()
 
     gpio.func_select(0x60000800 + 0x38, 0)
 
     gpio.set(1 shl 2, 0, 1 shl 2, 0)
 
+# TODO: remove below eventually
+
+proc user_rf_pre_init*() {.exportc: "user_rf_pre_init", codegenDecl: "$# __attribute__((section(\".irom0.text\"))) $#$#".} =
     discard
 
-
-user_init()
-user_rf_pre_init()
+proc user_init*() {.exportc: "user_init".} =
+    main()
