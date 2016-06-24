@@ -25,6 +25,7 @@ NIM_ARGS      := --path:$(SRCDIR) \
                  --os:standalone  \
                  --threads:off    \
                  --skipUserCfg    \
+                 --noMain         \
                  --nimcache:$(OBJDIR)
 
 # Hardware settings below
