@@ -1,6 +1,6 @@
 import gpio
 
-proc user_rf_pre_init*() {.extern: "user_rf_pre_init".} =
+proc user_rf_pre_init*() {.extern: "user_rf_pre_init", codegenDecl: "$# __attribute__((section(\".irom0.text\"))) $#$#".} =
     discard
 
 proc user_init*() {.extern: "user_init".} =

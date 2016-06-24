@@ -1,0 +1,8 @@
+Caret
+=====
+
+This is an experiment for running Nim code on the ESP8266 ("NodeMCU") microcontroller.
+
+Seriously WIP and needs a Nim compiler hack for the GC and to add support for the XTensa CPU.
+
+Not meant to be used by others at this time.
