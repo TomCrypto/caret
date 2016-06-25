@@ -2,11 +2,14 @@ SRCDIR        := src
 OBJDIR        := obj
 BINDIR        := bin
 
+ECHO          := echo
 RM            := rm -rf
 FIND          := find
 
 FIRMWARE      := caret.elf
 SEGMENT       := 0x*\.bin
+
+DEPENDENCIES  := $(lastword $(MAKEFILE_LIST)) nim.cfg
 
 SOURCES       := $(shell $(FIND) $(SRCDIR)/ -name '*.nim')
 MAIN          := $(SRCDIR)/main.nim
@@ -26,6 +29,7 @@ NIM_ARGS      := --path:$(SRCDIR) \
                  --threads:off    \
                  --skipUserCfg    \
                  --noMain         \
+                 --opt:size       \
                  --nimcache:$(OBJDIR)
 
 # Hardware settings below
@@ -42,24 +46,33 @@ ESPTOOL       := esptool.py
 ESP_PARSE     := $(ESPTOOL) $(DEVICE_ARGS) elf2image $(FLASH_ARGS)
 ESP_FLASH     := $(ESPTOOL) $(DEVICE_ARGS) write_flash $(FLASH_ARGS) --verify
 
-find_offsets   = $(patsubst $1/%.bin,%,$(shell $(FIND) $1/ -name $(SEGMENT)))
-get_segments   = $(foreach off,$(call find_offsets,$1),$(off) $1/$(off).bin)
+# TODO: better way to do this?
+
+get_offset     = $(patsubst $(BINDIR)/%.bin,%,$1)
+SEGMENTS      := $(BINDIR)/0x00000.bin \
+                 $(BINDIR)/0x40000.bin
 
 
 default: $(BINDIR)/$(FIRMWARE)
 
 
-$(BINDIR)/$(FIRMWARE): $(SOURCES)
+$(BINDIR)/$(FIRMWARE): $(SOURCES) $(DEPENDENCIES)
 	$(NIM) $(NIM_ARGS) --out:$@ $(MAIN)
+	@$(RM) $(SEGMENTS)  # out of date
+
+
+$(SEGMENTS): $(BINDIR)/$(FIRMWARE)
+	$(ESP_PARSE) -o $(BINDIR)/ $<
+	@$(ECHO) "Firmware assembled!"
 
 
 .PHONY: upload
-upload: $(BINDIR)/$(FIRMWARE)
-	$(RM) $(BINDIR)/$(SEGMENT); $(ESP_PARSE) -o $(BINDIR)/ $<
-	$(ESP_FLASH) $(call get_segments,$(BINDIR)) # uploading..
+upload: $(SEGMENTS)
+	$(ESP_FLASH) $(foreach seg,$^,$(call get_offset,$(seg)) $(seg))
+	@$(ECHO) "Firmware flashed!"
 
 
 .PHONY: clean
 clean:
-	$(RM) $(OBJDIR)/*
 	$(RM) $(BINDIR)/*
+	$(RM) $(OBJDIR)/*

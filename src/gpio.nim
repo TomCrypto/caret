@@ -1,5 +1,7 @@
 # Module gpio
 
+import esp8266 as mcu
+
 const
     BIT0 = 1
     BIT1 = 2
