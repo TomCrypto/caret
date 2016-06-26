@@ -3,6 +3,9 @@
 import esp8266 as mcu
 
 import macros
+import typeinfo
+
+import communications as com
 
 import gpio
 
@@ -11,50 +14,32 @@ type
         z: uint32
         sz: int16
 
+    TMyEnum = enum
+        a,
+        b
+
     TTestStruct = object
         x: uint32
         y: uint16
+        case tag: TMyEnum
+            of a: fieldA: float64
+            of b: fieldB: uint32  # TODO: for now, same size
+        num: float32
+        num2: float64
         nested: TTestStruct2
 
 
+proc ident*(x: var TTestStruct): int =
+    2
+
+
+# TODO: ask about export vs asterisk in IRC
+# TODO: work on packing function, size function, unpacking function, and test
+# (improve python decode script too?)
+# TODO: continue working on GPIO and Serial interfaces
+# TODO: investigate why main() is not GC-safe?
+
 # NODE.getType.repr => gives you the name of the type (or even the type?)
-
-# TODO: compile-time macro to determine size of objects (doesn't need to be compile time, just asserts?)
-# TODO: make pack function support nested types (done?)
-# TODO: make pack function support unions (not needed?)
-
-
-#proc pack[T](data: var T, buf: var array[fsize(data), byte]) =
-proc pack[T](data: var T; offset: int; buf: var openArray[byte]): int {. section: ROM .} =
-    when data is not object:
-        copyMem(addr(buf[offset]), addr(data), sizeof(data))
-        return sizeof(data)
-    else:
-        var written: int = 0
-
-        for value in data.fields:
-            written += pack(value, offset + written, buf)
-
-        return written
-
-
-    # VARIANT which doesn't allow proc(non-object)
-    # (this one also generates less functions?)
-
-    #var pos: int = 0
-
-    #for value in data.fields:
-    #    when value is object:
-    #        pos += pack(value, offset + pos, buf)
-    #    else:
-    #        copyMem(addr(buf[pos + offset]), addr(value), sizeof(value))
-    #        pos += sizeof(value)
-
-    #return pos
-
-
-
-
 
 
 
@@ -115,17 +100,24 @@ proc timer_func(timer_arg: pointer) {. section: ROM, exportc: "timer_func".} =
     count += 1
 
 proc user_procTask(events: pointer) {. section: ROM, exportc: "user_procTask".} =
-    var x: TTestStruct
-    var buf: array[12,byte]
+    var x: TTestStruct = TTestStruct(tag: a, fieldA: 42.11223344)
+    var buf: array[150,byte]
 
     x.x = 1943754307
     x.y = 64612
+    x.num = 4.4521
+    x.num2 = -0.25451
     x.nested.z = 123
+    x.nested.sz = int16(count)
 
-    x.nested.sz = cast[int16](pack(x, 0, buf))
-    discard pack(x, 0, buf)
+    let bufLen = encode(x, buf, channel = 5)
 
-    uart0_tx_buffer(addr(buf), 12)
+    # TODO: implement this in serial communication interface?
+
+    var delim : array[4,byte] = [0x5A'u8, 0x4E'u8, 0x5C'u8, 0x1C'u8]
+
+    uart0_tx_buffer(addr(delim), uint16(len(delim)))
+    uart0_tx_buffer(addr(buf), uint16(bufLen))
 
     os_delay_us(1000 * 100)
 
@@ -154,7 +146,7 @@ proc main() {. section: ROM .} =
 proc NimMain() {.importc.}
 
 proc sdkMain() {. section: ROM, exportc: "user_init" .} =
-    NimMain()
+    NimMain() # is this needed?
     main()
 
 proc unused() {. section: ROM, exportc: "user_rf_pre_init" .} =
