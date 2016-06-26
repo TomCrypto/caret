@@ -16,7 +16,7 @@ TODO
  - use correct linker script for full memory utilization? maybe the linker script should be included too
  - determine if/why we need a GC (string manipulation? not really, but maybe for exceptions?)
 
- License
- =======
+License
+-------
 
- This software is made available under the terms of the MIT license, see the LICENSE file for more information. This software uses Espressif's ESP8266 SDK.
+This software is made available under the terms of the MIT license, see the LICENSE file for more information. This software uses Espressif's ESP8266 SDK (version 1.2.0) however this is subject to change.
