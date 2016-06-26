@@ -8,6 +8,7 @@ import typeinfo
 import communications as com
 
 import gpio
+import wifi
 
 type
     TTestStruct2 = object
@@ -23,27 +24,17 @@ type
         y: uint16
         case tag: TMyEnum
             of a: fieldA: float64
-            of b: fieldB: uint32  # TODO: for now, same size
+            of b: fieldB: uint32
         num: float32
         num2: float64
         nested: TTestStruct2
 
 
-proc ident*(x: var TTestStruct): int =
+
+proc ident*(x: var TTestStruct): byte =
     2
 
 
-# TODO: ask about export vs asterisk in IRC
-# TODO: work on packing function, size function, unpacking function, and test
-# (improve python decode script too?)
-# TODO: continue working on GPIO and Serial interfaces
-# TODO: investigate why main() is not GC-safe?
-
-# NODE.getType.repr => gives you the name of the type (or even the type?)
-
-
-
-# quick and hackish port of the "Blinky" example from the ESP8266 SDK
 
 type
   ETSHandle* = uint32
@@ -81,8 +72,8 @@ type
   ETSTask* = proc (e: ptr ETSEvent)
 
 
-proc system_os_task(task: pointer; prio: uint8; queue: pointer; qlen: uint8) {.importc: "system_os_task", header: "<user_interface.h>".}
-
+proc system_os_task*(task: pointer; prio: uint8; queue: pointer; qlen: uint8) {.importc: "system_os_task".}
+proc system_os_post*(prio: uint8; signal: uint32; param: uint32) {.importc: "system_os_post".}
 
 
 var event : ETSEvent
@@ -92,44 +83,71 @@ var count {.volatile.} : int = 0
 var timer {.volatile.} : ETSTimer
 
 proc timer_func(timer_arg: pointer) {. section: ROM, exportc: "timer_func".} =
-    if count mod 2 == 0:
-        gpio.set(1 shl 2, 0, 1 shl 2, 0)
-    else:
-        gpio.set(0, 1 shl 2, 1 shl 2, 0)
+    #if count mod 2 == 0:
+    #    gpio.set(1 shl 2, 0, 1 shl 2, 0)
+    #else:
+    #    gpio.set(0, 1 shl 2, 1 shl 2, 0)
 
     count += 1
 
-proc user_procTask(events: pointer) {. section: ROM, exportc: "user_procTask".} =
-    var x: TTestStruct = TTestStruct(tag: a, fieldA: 42.11223344)
-    var buf: array[150,byte]
 
-    x.x = 1943754307
-    x.y = 64612
-    x.num = 4.4521
-    x.num2 = -0.25451
-    x.nested.z = 123
-    x.nested.sz = int16(count)
 
-    let bufLen = encode(x, buf, channel = 5)
+type
+    TReceivedStuff = object
+        length: uint32
 
-    # TODO: implement this in serial communication interface?
+proc ident*(x: var TReceivedStuff): byte =
+    return 3
 
-    var delim : array[4,byte] = [0x5A'u8, 0x4E'u8, 0x5C'u8, 0x1C'u8]
 
-    uart0_tx_buffer(addr(delim), uint16(len(delim)))
-    uart0_tx_buffer(addr(buf), uint16(bufLen))
 
-    os_delay_us(1000 * 100)
+
+# Delimiter for serial communication
+var delim : array[4,byte] = [0x5A'u8, 0x4E'u8, 0x5C'u8, 0x1C'u8]
+
+
+proc wifi_station_get_connect_status(): uint8 {.importc.}
+
+
+var num: int = 0
+
+
+proc user_procTask(events: ptr ETSEvent) {. section: ROM, exportc: "user_procTask".} =
+    if num mod 500 == 0:
+        var x: TTestStruct = TTestStruct(tag: a, fieldA: 42.11223344)
+        var buf: array[150,byte]
+
+        x.x = uint32(wifi_station_get_connect_status())
+        x.y = if not wifi.received(): 0 else: 11111
+        x.num = 4.4521
+        x.num2 = -0.25451
+        x.nested.z = wifi.getAddr1()
+        x.nested.sz = int16(count)
+
+        let bufLen = encode(x, buf, channel = 5)
+
+        # TODO: implement this in serial communication interface?
+
+        #uart0_tx_buffer(addr(delim), uint16(len(delim)))
+        #uart0_tx_buffer(addr(buf), uint16(bufLen))
+        wifi.send(buf, bufLen)
+
+    os_delay_us(1000 * 1)
+    system_os_post(0, 0, 0)
+
+    num += 1
 
 
 proc main() {. section: ROM .} =
     uart_init(9600, 9600)
 
-    gpio.init()
+    wifi.start()
 
-    gpio.func_select(0x60000800 + 0x38, 0)
+    #gpio.init()
 
-    gpio.set(1 shl 2, 0, 1 shl 2, 0)
+    #gpio.func_select(0x60000800 + 0x38, 0)
+
+    #gpio.set(1 shl 2, 0, 1 shl 2, 0)
 
     os_timer_disarm(addr(timer))
 
@@ -138,6 +156,7 @@ proc main() {. section: ROM .} =
     os_timer_arm(addr(timer), 100, 1, 1)
 
     system_os_task(user_procTask, 0, addr(event), 1)
+    system_os_post(0, 0, 0)
 
 
 

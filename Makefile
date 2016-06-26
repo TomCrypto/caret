@@ -7,7 +7,6 @@ RM            := rm -rf
 FIND          := find
 
 FIRMWARE      := caret.elf
-SEGMENT       := 0x*\.bin
 
 DEPENDENCIES  := $(lastword $(MAKEFILE_LIST)) nim.cfg
 

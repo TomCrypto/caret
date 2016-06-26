@@ -4,66 +4,39 @@ from serial import *
 import binascii
 import struct
 import sys
+import socket
 
 if __name__ ==  '__main__':
-    ser = Serial(
-        port=sys.argv[1],
-        baudrate=9600,
-        bytesize=EIGHTBITS,
-        parity=PARITY_NONE,
-        stopbits=STOPBITS_ONE,
-        timeout=0.1,
-        xonxoff=0,
-        rtscts=0,
-        interCharTimeout=None
-    )
-    
-    ser.isOpen()
-    
-    ser.write('!')  # get it to print stuff
-    
-    print "Now reading..."
-
-    state = "waiting"
-    waitBuf = ""
-    bom = None
-    proto_version = None
-    message_flags = None
-    message_ident = None
+    sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+    sock.bind(('0.0.0.0', 2000))
 
     while True:
-        while ser.inWaiting() > 0:
-            if state == "waiting":
-                waitBuf += ser.read(1)
-                if len(waitBuf) == 5:
-                    waitBuf = waitBuf[1:]
+        data, _ = sock.recvfrom(256)
 
-                if waitBuf == chr(0x5A) + chr(0x4E) + chr(0x5C) + chr(0x1C):
-                    state = "reading"
-                    waitBuf = ""
-            elif state == "reading":
-                bomData = ser.read(1)
-                if ord(bomData[0]) == 0xFF:
-                    bom = "big"
-                else:
-                    bom = "little"
+        bomData = data[0]
 
-                verFlags = ord(ser.read(1))
-                proto_version = verFlags and 0xF
-                message_flags = verFlags >> 4
+        if ord(bomData) == 0xFF:
+            bom = "big"
+        else:
+            bom = "little"
 
-                message_ident = ord(ser.read(1))
-                channel = ord(ser.read(1))
+        verFlags = ord(data[1])
+        proto_version = verFlags & 0xF
+        message_flags = verFlags >> 4
 
-                # TODO: lookup here!
+        message_ident = ord(data[2])
+        channel = ord(data[3])
 
-                fmt = ("<" if bom == "little" else ">") + "LHBdfdLh"
+        # TODO: lookup here!
 
-                msgLen = struct.calcsize(fmt)
+        if message_ident == 2:
+            fmt = ("<" if bom == "little" else ">") + "LHBdfdLh"
+        elif message_ident == 3:
+            fmt = ("<" if bom == "little" else ">") + "L"
 
-                message = struct.unpack(fmt, ser.read(msgLen))
+        msgLen = struct.calcsize(fmt)
 
-                print("MESSAGE [endian = {0}] [proto = {1}] [flags = {2}] [channel = {3}] [message = {4}]".format(bom, proto_version, message_flags, channel, message_ident))
-                print(message)
+        message = struct.unpack(fmt, data[4:4 + msgLen])
 
-                state = "waiting"
+        print("MESSAGE [endian = {0}] [proto = {1}] [flags = {2}] [channel = {3}] [message = {4}]".format(bom, proto_version, message_flags, channel, message_ident))
+        print(message)

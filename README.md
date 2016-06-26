@@ -7,6 +7,8 @@ Seriously WIP and needs a small Nim compiler hack to disable all OS calls and to
 
 Not meant to be used by others at this time.
 
+To run, edit `settings.tmpl` with the appropriate settings and rename it `settings.nim` (the latter is gitignored to ensure sensitive information never ends up in source control).
+
 TODO
 ----
 
@@ -15,6 +17,8 @@ TODO
  - Finish implementing GPIO and timer (?) modules
  - use correct linker script for full memory utilization? maybe the linker script should be included too
  - determine if/why we need a GC (string manipulation? not really, but maybe for exceptions?)
+ - are Maybe types in Nim a superior alternative to exceptions for our purposes here?
+ - checkout examples/driver_lib, plenty of interesting code in there to peruse
 
 License
 -------
