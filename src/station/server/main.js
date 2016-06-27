@@ -64,6 +64,19 @@ function parseIP(ipInteger) {
     return `${a}.${b}.${c}.${d}`;
 }
 
+
+/* TODO: implement these somehow */
+
+function lookupError(id) {
+    return "Something went wrong!";
+}
+
+function lookupFile(id) {
+    return "main.nim";
+}
+
+
+
 var MessageType = {
     TestMessage: {
         name: 'TestMessage',
@@ -85,14 +98,43 @@ var MessageType = {
                 }
             };
         }, encode: (message) => {
-            // ???
+            // TODO: implement
+            return undefined;
+        }
+    },
+    FaultMessage: {
+        name: "FaultMessage",
+        format: 'BBBBHHHHHHHHBB',
+        decode: (data) => {
+            var num = data[12];
+            var overflow = data[13];
+
+            var msg = {
+                stackTrace: [],
+                omittedFrames: overflow == 1,
+            };
+
+            /* stack trace is in reverse order */
+
+            for (var i = num - 1; i >= 0; --i) {
+                msg.stackTrace.push({
+                    'error': lookupError(data[8 + i]),
+                    'line': data[4 + i],
+                    'file': lookupFile(data[0 + i]),
+                })
+            }
+
+            return msg;
+        }, encode: (message) => {
+            // TODO: implement
             return undefined;
         }
     }
 }
 
 var MessageTypeMap = {
-    0x02: MessageType.TestMessage
+    0x02: MessageType.TestMessage,
+    0x04: MessageType.FaultMessage,
 }
 
 
@@ -116,7 +158,7 @@ function parseMessage(buffer) {
 
     var LE = (buffer[0] == 0x00) ? '<' : '>';
 
-    var protocolVersion = buffer[1] & 0xF;
+    var protocolVersion = buffer[1] & 0x3;
 
     if (protocolVersion != VERSION) {
         throw new Error("Invalid protocol version.");
@@ -126,7 +168,7 @@ function parseMessage(buffer) {
         throw new Error("Unknown message type.");
     }
 
-    var messageOrig = TransportMap[buffer[1] >> 4];
+    var messageOrig = TransportMap[(buffer[1] >> 2) & 0x3];
     var messageType = MessageTypeMap[buffer[2]];
     var messageChan = buffer[3];
 

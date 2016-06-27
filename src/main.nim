@@ -1,9 +1,11 @@
 # Main logic module
 
-import esp8266 as mcu
+import settings, esp8266 as mcu
 
 import macros
 import typeinfo
+
+import faults
 
 import communications as com
 
@@ -25,9 +27,8 @@ type
 
 
 
-proc ident*(x: var TTestStruct): byte =
+proc ident*(x: TTestStruct): byte =
     2
-
 
 
 type
@@ -86,24 +87,31 @@ proc timer_func(timer_arg: pointer) {. section: ROM, exportc: "timer_func".} =
 
 
 
-type
-    TReceivedStuff = object
-        length: uint32
-
-proc ident*(x: var TReceivedStuff): byte =
-    return 3
-
-
-
-
-# Delimiter for serial communication
-var delim : array[4,byte] = [0x5A'u8, 0x4E'u8, 0x5C'u8, 0x1C'u8]
-
 
 proc wifi_station_get_connect_status(): uint8 {.importc.}
 
 
 var num: int = 0
+
+
+
+# ultra basic Maybe implementation in Nim for testing...
+
+type
+    TResult[T] = object
+        case valid: bool
+            of true: value: T
+            of false: error: TFaultMsg
+
+
+proc doRiskyOperation(x: int): TResult[int] =
+    if x mod 5000 == 0:
+        # fail!
+        return TResult[int](valid: false, error: fault(TestFault))
+    else:
+        return TResult[int](valid: true, value: x)
+
+
 
 
 proc user_procTask(events: ptr ETSEvent) {. section: ROM, exportc: "user_procTask".} =
@@ -120,11 +128,15 @@ proc user_procTask(events: ptr ETSEvent) {. section: ROM, exportc: "user_procTas
 
         let bufLen = encode(x, buf, transport = WiFi, channel = 5)
 
-        # TODO: implement this in serial communication interface?
+        # do something that might fail
 
-        #uart0_tx_buffer(addr(delim), uint16(len(delim)))
-        #uart0_tx_buffer(addr(buf), uint16(bufLen))
-        wifi.send(buf, bufLen)
+        let resultValue : TResult[int] = doRiskyOperation(num)
+
+        if not resultValue.valid:
+            let faultLen = encode(resultValue.error, buf, transport = Satellite, channel = 0)
+            wifi.send(buf, faultLen)
+        else:
+            wifi.send(buf, bufLen)
 
     os_delay_us(1000 * 1)
     system_os_post(0, 0, 0)

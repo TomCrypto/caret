@@ -19,7 +19,7 @@ import macros
 
 # TODO: make this into a compile-time macro (but this is probably constexpr to the compiler anyway)
 
-proc packedSize*[T](data: var T): int =
+proc packedSize*[T](data: T): int =
     var size: int = 0
 
     for value in data.fields:
@@ -33,14 +33,15 @@ proc packedSize*[T](data: var T): int =
 # TODO: make this safe
 
 
-proc pack[T](data: var T; offset: int; buf: var openArray[byte]): int {. section: ROM .} =
+proc pack[T](data: T; offset: int; buf: var openArray[byte]): int {. section: ROM .} =
     var pos: int = 0
 
     for value in data.fields:
         when value is object:
             pos += pack(value, offset + pos, buf)
         else:
-            copyMem(addr(buf[pos + offset]), addr(value), sizeof(value))
+            var val = value  # make a value copy (if necessary only)
+            copyMem(addr(buf[pos + offset]), addr(val), sizeof(value))
             pos += sizeof(value)
 
     return pos
@@ -93,7 +94,7 @@ type
 # TODO: make this safe to overflows?
 
 
-proc encode[T](message: var T; dest: var openArray[byte]; channel: byte; transport: Transport; flags: set[MessageFlag] = {}): int =
+proc encode[T](message: T; dest: var openArray[byte]; channel: byte; transport: Transport; flags: set[MessageFlag] = {}): int =
     var bom : uint16 = BOM
 
     if packedSize(message) == 0:
@@ -102,7 +103,7 @@ proc encode[T](message: var T; dest: var openArray[byte]; channel: byte; transpo
     copyMem(addr(dest[0]), addr(bom), sizeof(bom))
 
     dest[1] = VER or (cast[byte](transport) shl 2) or (cast[byte](flags) shl 4)
-    dest[2] = message.ident
+    dest[2] = message.ident # TODO: use macro magic to look up an enum here instead?
     dest[3] = channel
 
     return 4 + pack(message, 4, dest)

@@ -19,13 +19,21 @@ This is not a plug-in library; one is meant to work directly inside the source t
 TODO
 ----
 
- - I want my main() back, what is libmain.a doing with it exactly?
- - Finish implementing Wifi interface
- - Finish implementing GPIO and timer (?) modules
+ - work out a good place to store message type identifiers and error codes, and how to keep them synced between web service and microcontroller (maybe they shouldn't be linked; web service depends much more heavily on them than the MCU)
+ - it's probably best to come up with a sensible settings DSL in Nim and just parse it from NodeJS (pass the settings file as a command line option?)
+ - finish implementing Maybe type for general error handling
+ - finish implementing WiFi interface
+ - mock up quick front-end that just lists all messages, refreshed with AJAX or otherwise
+
+In the far future:
+
+ - reclaim main() function (what is libmain.a doing with it exactly?)
  - use correct linker script for full memory utilization? maybe the linker script should be included too
- - determine if/why we need a GC (string manipulation? not really, but maybe for exceptions?)
- - are Maybe types in Nim a superior alternative to exceptions for our purposes here?
- - checkout examples/driver_lib, plenty of interesting code in there to peruse
+ - determine if/why we need a GC (string manipulation? ...)
+
+Notes to myself:
+
+ - check out examples/driver_lib from the SDK, plenty of interesting code in there to peruse
 
 License
 -------
