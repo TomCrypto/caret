@@ -19,4 +19,12 @@ macro section(param: string, body: untyped): stmt =
     return body
 
 
-export section, ROM
+proc os_printf(fmt: cstring) {. importc: "os_printf_plus", varargs .}
+
+
+proc debug(fmt: cstring) =
+    os_printf(cstring(fmt))
+    os_printf("\x0D\x0A\0")
+
+
+export debug, section, ROM

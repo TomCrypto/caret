@@ -90,7 +90,6 @@ proc espconn_port(): uint32 {.importc.}
 proc espconn_regist_sentcb(conn: ptr EspConn; sent_cb: pointer) {.importc.}
 proc espconn_regist_recvcb(conn: ptr EspConn; recv_cb: pointer) {.importc.}
 proc os_delay_us(n: int) {.importc: "ets_delay_us", header: "<osapi.h>".}
-proc os_zalloc(n: int): pointer {.importc: "pvPortZalloc".}
 
 proc wifi_station_get_connect_status(): int {.importc.}
 
@@ -98,11 +97,20 @@ proc wifi_station_get_connect_status(): int {.importc.}
 var conf : StationConfig
 
 
-var conn : ptr EspConn
-var udp : ptr ESPConnUDP
+var conn : EspConn
+var udp : ESPConnUDP
 var created: bool = false
 
-proc uart0_tx_buffer(data: pointer; len: uint16) {. importc: "uart0_tx_buffer" .}
+proc uart0_tx_buffer(data: cstring; len: uint16) {. importc: "uart0_tx_buffer" .}
+
+
+proc getIP*(): uint32 =
+    var info : IpInfo
+
+    wifi_get_ip_info(STATION_IF, addr(info))
+
+    return info.ip
+
 
 proc getSize(): int =
     {.emit:"""
@@ -134,23 +142,7 @@ proc start() {. section: ROM .} =
     wifi_station_set_config(addr(conf))
     wifi_station_connect()
 
-    conn = cast[ptr ESPConn](os_zalloc(getSize()))
-    udp = cast[ptr ESPConnUDP](os_zalloc(16))
 
-    #espconn_connect(addr(conn))
-
-
-
-proc isBad*(): bool =
-    return (conn == nil) or (udp == nil)
-
-
-proc getAddr1*(): byte =
-    var info : IpInfo
-
-    wifi_get_ip_info(STATION_IF, addr(info))
-
-    return (info.ip and 0xFF)
 
 
 
@@ -163,8 +155,7 @@ proc send(buf: var openArray[byte]; length: int) {. section: ROM .} =
         if not created:
             conn.ctype = 0x20 # UDP
             conn.state = 0 # None
-            #conn.proto.udp = addr(udp)
-            conn.proto.udp = udp
+            conn.proto.udp = addr(udp)
 
             conn.proto.udp.local_port = 2000
             conn.proto.udp.remote_port = 2000
@@ -177,13 +168,15 @@ proc send(buf: var openArray[byte]; length: int) {. section: ROM .} =
             conn.proto.udp.remote_ip[2] = 100
             conn.proto.udp.remote_ip[3] = 134
 
-            espconn_regist_sentcb(conn, sent_cb)
-            espconn_regist_recvcb(conn, recv_cb)
+            espconn_regist_sentcb(addr(conn), sent_cb)
+            espconn_regist_recvcb(addr(conn), recv_cb)
 
-            espconn_create(conn)
+            espconn_create(addr(conn))
             created = true
 
-        espconn_sent(conn, addr(buf), uint16(length))
+        espconn_sent(addr(conn), addr(buf), uint16(length))
+        #debug("sent packet!\r\n", 1, 2)
+        debug("sent packet!")
 
 
 export start, send

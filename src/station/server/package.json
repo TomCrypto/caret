@@ -1,0 +1,22 @@
+{
+  "name": "station",
+  "version": "0.1.0",
+  "description": "Caret base station web service",
+  "main": "main.js",
+  "directories": {
+    "test": "test"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/TomCrypto/caret.git"
+  },
+  "author": "Thomas \"TomCrypto\" Bénéteau",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/TomCrypto/caret/issues"
+  },
+  "homepage": "https://github.com/TomCrypto/caret#readme"
+}

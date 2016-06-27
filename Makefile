@@ -31,6 +31,12 @@ NIM_ARGS      := --path:$(SRCDIR) \
                  --opt:size       \
                  --nimcache:$(OBJDIR)
 
+NODE          := node
+STATION_ROOT  := $(SRCDIR)/station
+STATION_WWW   := $(STATION_ROOT)/public
+STATION_DB    := $(STATION_ROOT)/database
+STATION_SRC   := $(STATION_ROOT)/server
+
 # Hardware settings below
 
 DEVICE        ?= /dev/ttyUSB0
@@ -69,6 +75,11 @@ $(SEGMENTS): $(BINDIR)/$(FIRMWARE)
 upload: $(SEGMENTS)
 	$(ESP_FLASH) $(foreach seg,$^,$(call get_offset,$(seg)) $(seg))
 	@$(ECHO) "Firmware flashed!"
+
+
+.PHONY: station
+station:
+	$(NODE) $(STATION_SRC) $(STATION_WWW) $(STATION_DB)
 
 
 .PHONY: clean

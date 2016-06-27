@@ -15,19 +15,13 @@ type
         z: uint32
         sz: int16
 
-    TMyEnum = enum
-        a,
-        b
-
     TTestStruct = object
         x: uint32
         y: uint16
-        case tag: TMyEnum
-            of a: fieldA: float64
-            of b: fieldB: uint32
         num: float32
         num2: float64
         nested: TTestStruct2
+
 
 
 
@@ -114,17 +108,17 @@ var num: int = 0
 
 proc user_procTask(events: ptr ETSEvent) {. section: ROM, exportc: "user_procTask".} =
     if num mod 500 == 0:
-        var x: TTestStruct = TTestStruct(tag: a, fieldA: 42.11223344)
+        var x: TTestStruct
         var buf: array[150,byte]
 
-        x.x = uint32(wifi_station_get_connect_status())
+        x.x = wifi.getIP()
         x.y = if not wifi.received(): 0 else: 11111
         x.num = 4.4521
         x.num2 = -0.25451
-        x.nested.z = wifi.getAddr1()
-        x.nested.sz = int16(count)
+        x.nested.z = uint32(count)
+        x.nested.sz = int16(packedSize(x))
 
-        let bufLen = encode(x, buf, channel = 5)
+        let bufLen = encode(x, buf, transport = WiFi, channel = 5)
 
         # TODO: implement this in serial communication interface?
 
