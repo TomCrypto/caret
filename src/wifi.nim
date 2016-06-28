@@ -129,7 +129,7 @@ proc received*(): bool =
 
 
 proc recv_cb(arg: pointer; data: pointer; len: uint16) {.exportc, section : ROM.} =
-    #uart0_tx_buffer(data, len)
+    debug("Received packet!")
     receiv = true
 
 
@@ -159,10 +159,6 @@ proc send(buf: var openArray[byte]; length: int) {. section: ROM .} =
 
             conn.proto.udp.local_port = 2000
             conn.proto.udp.remote_port = 2000
-            conn.proto.udp.local_ip[0] = 192
-            conn.proto.udp.local_ip[1] = 168
-            conn.proto.udp.local_ip[2] = 100
-            conn.proto.udp.local_ip[3] = 125
             conn.proto.udp.remote_ip[0] = 192
             conn.proto.udp.remote_ip[1] = 168
             conn.proto.udp.remote_ip[2] = 100
@@ -175,8 +171,6 @@ proc send(buf: var openArray[byte]; length: int) {. section: ROM .} =
             created = true
 
         espconn_sent(addr(conn), addr(buf), uint16(length))
-        #debug("sent packet!\r\n", 1, 2)
-        debug("sent packet!")
 
 
 export start, send

@@ -1,6 +1,6 @@
 # Main logic module
 
-import settings, esp8266 as mcu
+import esp8266 as mcu
 
 import macros
 import typeinfo
@@ -24,11 +24,6 @@ type
         num2: float64
         nested: TTestStruct2
 
-
-
-
-proc ident*(x: TTestStruct): byte =
-    2
 
 
 type
@@ -91,25 +86,25 @@ proc timer_func(timer_arg: pointer) {. section: ROM, exportc: "timer_func".} =
 proc wifi_station_get_connect_status(): uint8 {.importc.}
 
 
-var num: int = 0
+var num: int = 1
 
 
 
-# ultra basic Maybe implementation in Nim for testing...
 
 type
-    TResult[T] = object
-        case valid: bool
+    Maybe[T] = object
+        case has: bool
             of true: value: T
-            of false: error: TFaultMsg
+            of false: nil
 
 
-proc doRiskyOperation(x: int): TResult[int] =
-    if x mod 5000 == 0:
-        # fail!
-        return TResult[int](valid: false, error: fault(TestFault))
+
+
+proc doRiskyOperation(x: int): Faultable[int] =
+    if x mod 15000 == 0:
+        return failure[int](ExampleFault)
     else:
-        return TResult[int](valid: true, value: x)
+        return success[int](x)
 
 
 
@@ -130,13 +125,16 @@ proc user_procTask(events: ptr ETSEvent) {. section: ROM, exportc: "user_procTas
 
         # do something that might fail
 
-        let resultValue : TResult[int] = doRiskyOperation(num)
+        let result : Faultable[int] = doRiskyOperation(num)
 
-        if not resultValue.valid:
-            let faultLen = encode(resultValue.error, buf, transport = Satellite, channel = 0)
-            wifi.send(buf, faultLen)
-        else:
+        if ?result:
             wifi.send(buf, bufLen)
+        else:
+            #let faultLen = encode(stackTrace(result), buf, transport = Satellite, channel = 0)
+            let faultLen = encode(x, buf, transport = Satellite, channel = 0)
+            discard stackTrace(result)
+            wifi.send(buf, faultLen)
+            
 
     os_delay_us(1000 * 1)
     system_os_post(0, 0, 0)
@@ -147,9 +145,11 @@ proc user_procTask(events: ptr ETSEvent) {. section: ROM, exportc: "user_procTas
 proc main() {. section: ROM .} =
     uart_init(9600, 9600)
 
+    debug("Hello from ESP8266!!!")
+
     wifi.start()
 
-    #gpio.init()
+    gpio.init()
 
     #gpio.func_select(0x60000800 + 0x38, 0)
 

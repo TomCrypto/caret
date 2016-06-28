@@ -1,5 +1,7 @@
 import esp8266 as mcu
 
+import settings
+
 import macros
 
 
@@ -103,7 +105,7 @@ proc encode[T](message: T; dest: var openArray[byte]; channel: byte; transport: 
     copyMem(addr(dest[0]), addr(bom), sizeof(bom))
 
     dest[1] = VER or (cast[byte](transport) shl 2) or (cast[byte](flags) shl 4)
-    dest[2] = message.ident # TODO: use macro magic to look up an enum here instead?
+    dest[2] = messageID(T)
     dest[3] = channel
 
     return 4 + pack(message, 4, dest)

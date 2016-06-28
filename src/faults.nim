@@ -4,90 +4,62 @@ import settings
 
 import macros
 
-type
-    TFaultMsg = object
-        file*: array[4, uint8]
-        line*: array[4, uint16]
-        err*:  array[4, uint16]
-        levels*: uint8
-        overflow*: uint8
 
-proc ident*(x: TFaultMsg): byte =
-    return 4
+const
+    StackTraceLength = 6
+
 
 type
-    TFault = enum
-        TestFault = 0x00
+    Faultable*[T] = object
+        case failed: bool
+            of true: result: T
+            of false: nil
+
+    StackTrace = object
+        file*: array[StackTraceLength, uint16]
+        line*: array[StackTraceLength, uint16]
+        code*: array[StackTraceLength, uint16]
+        deep*: uint8
+
+    Fault* = enum
+        ExampleFault = 0x00
 
 
-# /!\ need to sort out strutils issue, or reimplement an allocation-free string library /!\
-
-proc capitalize(c: char): char =
-    case c
-        of 'a': return 'A'
-        of 'b': return 'B'
-        of 'c': return 'C'
-        of 'd': return 'D'
-        of 'e': return 'E'
-        of 'f': return 'F'
-        of 'g': return 'G'
-        of 'h': return 'H'
-        of 'i': return 'I'
-        of 'j': return 'J'
-        of 'k': return 'K'
-        of 'l': return 'L'
-        of 'm': return 'M'
-        of 'n': return 'N'
-        of 'o': return 'O'
-        of 'p': return 'P'
-        of 'q': return 'Q'
-        of 'r': return 'R'
-        of 's': return 'S'
-        of 't': return 'T'
-        of 'u': return 'U'
-        of 'v': return 'V'
-        of 'w': return 'W'
-        of 'x': return 'X'
-        of 'y': return 'Y'
-        of 'z': return 'Z'
-        else: return c
+var
+    trace : StackTrace
 
 
+template failure*[T](flt: Fault): Faultable[T] =
+    const ctx = instantiationInfo()  # filename & line
+    let index = min(int(trace.deep), len(trace.code))
+    trace.file[index] = fileID(ctx.filename)
+    trace.line[index] = uint16(ctx.line)
+    trace.code[index] = uint16(flt)
+    trace.deep += 1
 
-# this function might belong in settings.nim?
-
-macro fileID(file: static[string]): uint8 =
-    result = newNimNode(nnkCall)
-    result.add(newIdentNode("uint8"))
-
-    var name = $parseExpr(file)[0] & "ID"
-    name[0] = capitalize(name[0])
-
-    result.add(newDotExpr(newIdentNode("settings"), newIdentNode(name)))
+    Faultable[T](failed: true)
 
 
-template fault(fault: TFault): expr =
-    const ctx = instantiationInfo()
-
-    TFaultMsg(file: [fileID(ctx.filename), 0'u8,  0'u8,  0'u8 ],
-              line: [uint16(ctx.line),     0'u16, 0'u16, 0'u16],
-              err:  [uint16(fault),        0'u16, 0'u16, 0'u16],
-              levels: 1, overflow: 0)
+template success*[T](value: T): Faultable[T] =
+    Faultable[T](failed: false, result: value)
 
 
-template fault(fault: TFault; rec: var TFaultMsg): expr =
-    const ctx = instantiationInfo()
-
-    if rec.levels == uint8(rec.file.len):
-        rec.overflow = 1
-        rec.levels -= 1
-
-    rec.file[rec.levels] = fileID(ctx.filename)
-    rec.line[rec.levels] = uint16(ctx.line)
-    rec.err[rec.levels]  = uint16(fault)
-    rec.levels += 1
-
-    rec
+proc stackTrace*[T](src: Faultable[T]): StackTrace =
+    var copy = trace
+    trace.deep = 0
+    return copy
 
 
-export TFault, TFaultMsg, fault
+proc `?`*[T](obj: Faultable[T]): bool =
+    return not obj.failed
+
+
+proc `^`*[T](obj: Faultable[T]): T =
+    return obj.result
+
+
+
+
+
+
+export settings

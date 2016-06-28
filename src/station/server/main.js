@@ -104,10 +104,10 @@ var MessageType = {
     },
     FaultMessage: {
         name: "FaultMessage",
-        format: 'BBBBHHHHHHHHBB',
+        format: 'HHHHHHHHHHHHHHHHHHB',
         decode: (data) => {
-            var num = data[12];
-            var overflow = data[13];
+            var num = data[18];
+            var overflow = num > 6;
 
             var msg = {
                 stackTrace: [],
@@ -118,8 +118,8 @@ var MessageType = {
 
             for (var i = num - 1; i >= 0; --i) {
                 msg.stackTrace.push({
-                    'error': lookupError(data[8 + i]),
-                    'line': data[4 + i],
+                    'error': lookupError(data[12 + i]),
+                    'line': data[6 + i],
                     'file': lookupFile(data[0 + i]),
                 })
             }

@@ -2,7 +2,6 @@
 
 import macros
 
-
 const
     ROM = ".irom0.text"
 
@@ -21,10 +20,38 @@ macro section(param: string, body: untyped): stmt =
 
 proc os_printf(fmt: cstring) {. importc: "os_printf_plus", varargs .}
 
-
 proc debug(fmt: cstring) =
     os_printf(cstring(fmt))
     os_printf("\x0D\x0A\0")
 
 
-export debug, section, ROM
+
+proc disableInterrupts() {. importc: "ets_intr_lock" .}
+proc enableInterrupts() {. importc: "ets_intr_unlock" .}
+
+proc reboot*() {. importc: "system_restart" .}
+
+
+proc interrupts(disable: static[bool]) =
+    when disable:
+        disableInterrupts()
+    else:
+        enableInterrupts()
+
+
+
+proc rawoutput(s: string) {. section: ROM, exportc: "rawoutput" .} =
+    debug(s)
+
+
+proc panic(s: string) {. section: ROM, exportc: "panic" .} =
+    debug("\r\n\r\n=== ESP8266 PANIC ===\r\n")
+    debug(s)
+    debug("\r\n")
+    debug("Now rebooting...")
+
+    reboot()
+
+
+
+export debug, section, interrupts, ROM
