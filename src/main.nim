@@ -118,7 +118,7 @@ proc user_procTask(events: ptr ETSEvent) {. section: ROM, exportc: "user_procTas
         x.y = mcu.getVCC()
         x.num = 4.4521
         x.num2 = -0.25451
-        x.nested.z = uint32(count)
+        x.nested.z = uint32(mcu.rtcTime())
         x.nested.sz = int16(packedSize(x))
 
         let bufLen = encode(x, buf, transport = WiFi, channel = 5)

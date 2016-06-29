@@ -37,6 +37,8 @@ proc getVCC*(): uint16 {. importc: "readvdd33" .}
 
 proc updateFrequency*(freq: byte): bool {. importc: "system_update_cpu_freq" .}
 
+proc rtcTime*(): uint32 {. importc: "system_get_rtc_time" .}
+
 
 proc interrupts(disable: static[bool]) =
     when disable:
