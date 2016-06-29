@@ -130,8 +130,7 @@ proc user_procTask(events: ptr ETSEvent) {. section: ROM, exportc: "user_procTas
         if ?result:
             wifi.send(buf, bufLen)
         else:
-            #let faultLen = encode(stackTrace(result), buf, transport = Satellite, channel = 0)
-            let faultLen = encode(x, buf, transport = Satellite, channel = 0)
+            let faultLen = encode(stackTrace(result), buf, transport = Satellite, channel = 0)
             discard stackTrace(result)
             wifi.send(buf, faultLen)
 
@@ -150,7 +149,7 @@ proc main() {. section: ROM .} =
 
     gpio.init()
 
-    if not mcu.updateFrequency(160):
+    if not mcu.updateFrequency(80):
         debug("Failed to change frequency")
 
     debug("====== MEMINFO ======")

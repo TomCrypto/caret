@@ -21,9 +21,8 @@ TODO
 
  - work out a good place to store message type identifiers and error codes, and how to keep them synced between web service and microcontroller (maybe they shouldn't be linked; web service depends much more heavily on them than the MCU)
  - it's probably best to come up with a sensible settings DSL in Nim and just parse it from NodeJS (pass the settings file as a command line option?)
- - finish implementing Maybe type for general error handling
  - finish implementing WiFi interface
- - mock up quick front-end that just lists all messages, refreshed with AJAX or otherwise
+ - consider using Elm framework for front-end? (been meaning to check it out)
 
 In the far future:
 
