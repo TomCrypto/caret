@@ -115,7 +115,7 @@ proc user_procTask(events: ptr ETSEvent) {. section: ROM, exportc: "user_procTas
         var buf: array[150,byte]
 
         x.x = wifi.getIP()
-        x.y = if not wifi.received(): 0 else: 11111
+        x.y = mcu.getVCC()
         x.num = 4.4521
         x.num2 = -0.25451
         x.nested.z = uint32(count)
@@ -134,7 +134,6 @@ proc user_procTask(events: ptr ETSEvent) {. section: ROM, exportc: "user_procTas
             let faultLen = encode(x, buf, transport = Satellite, channel = 0)
             discard stackTrace(result)
             wifi.send(buf, faultLen)
-            
 
     os_delay_us(1000 * 1)
     system_os_post(0, 0, 0)
@@ -150,6 +149,13 @@ proc main() {. section: ROM .} =
     wifi.start()
 
     gpio.init()
+
+    if not mcu.updateFrequency(160):
+        debug("Failed to change frequency")
+
+    debug("====== MEMINFO ======")
+    mcu.printMemInfo()
+    debug("====== MEMINFO ======")
 
     #gpio.func_select(0x60000800 + 0x38, 0)
 

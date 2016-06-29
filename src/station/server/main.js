@@ -6,6 +6,23 @@ const config = require('./config')[env];
 
 const path = require('path');
 
+
+
+
+var nedb = require('nedb');
+var datastore = new nedb({
+    filename: path.join(databaseDir, config.root, config.filename)
+});
+
+datastore.loadDatabase();
+
+
+
+
+
+
+
+
 var express = require('express');
 var app = express();
 app.use('/', express.static(publicDir)); // ← adjust
@@ -13,6 +30,16 @@ app.listen(3000, function() { console.log('listening'); });
 
 app.get('/test', function(req, res) {
     res.send("this is /test!");
+});
+
+app.get('/messages', (req, res) => {
+    var date = new Date(req.query.since);
+    var offset = parseInt(req.query.offset);
+    var count = parseInt(req.query.count);
+
+    datastore.find({received: { $gt: date }}).sort({received: 1}).skip(offset).limit(count).exec((err, docs) => {
+        res.json(docs);
+    });
 });
 
 const dgram = require('dgram');
@@ -24,13 +51,6 @@ server.on('error', (err) => {
 });
 
 
-
-var nedb = require('nedb');
-var datastore = new nedb({
-    filename: path.join(databaseDir, config.root, config.filename)
-});
-
-datastore.loadDatabase();
 
 
 
@@ -90,6 +110,7 @@ var MessageType = {
         ].join(), decode: (data) => {
             return {
                 ip: parseIP(data.ip),
+                y: data.y,
                 num: data.num,
                 num2: data.num2,
                 nested: {
@@ -181,7 +202,7 @@ function parseMessage(buffer) {
     var message = messageType.decode(data);
 
     return {
-        received: new Date().toISOString(),
+        received: new Date(),
         type:     messageType.name,
         channel:  messageChan,
         origin:   messageOrig,
@@ -191,8 +212,6 @@ function parseMessage(buffer) {
 
 server.on('message', (packet, rinfo) => {
     var message = parseMessage(packet);
-
-    console.log(JSON.stringify(message, null, 2));
 
     datastore.insert(message);
 });

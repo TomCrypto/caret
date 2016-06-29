@@ -32,6 +32,12 @@ proc enableInterrupts() {. importc: "ets_intr_unlock" .}
 proc reboot*() {. importc: "system_restart" .}
 
 
+proc printMemInfo*() {. importc: "system_print_meminfo" .}
+proc getVCC*(): uint16 {. importc: "readvdd33" .}
+
+proc updateFrequency*(freq: byte): bool {. importc: "system_update_cpu_freq" .}
+
+
 proc interrupts(disable: static[bool]) =
     when disable:
         disableInterrupts()
@@ -51,6 +57,10 @@ proc panic(s: string) {. section: ROM, exportc: "panic" .} =
     debug("Now rebooting...")
 
     reboot()
+
+
+
+
 
 
 
