@@ -41,7 +41,10 @@ template failure*[T](flt: Fault): Faultable[T] =
 
 
 template success*[T](value: T): Faultable[T] =
-    Faultable[T](failed: false, result: value)
+    when value is void:
+        Faultable[T](failed: false)
+    else:
+        Faultable[T](failed: false, result: value)
 
 
 proc stackTrace*[T](src: Faultable[T]): StackTrace =

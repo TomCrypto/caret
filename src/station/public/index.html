@@ -5,20 +5,25 @@
     <title>Caret Web Interface</title>
     <link rel="stylesheet" href="stylesheet.css">
     <script src="js/jquery-3.0.0.min.js"></script>
-    <script src="updates.js"></script>
+    <script language="javascript" type="text/javascript" src="js/jquery.flot.js"></script>
+    <script language="javascript" type="text/javascript" src="js/jquery.flot.time.js"></script>
+    <script language="javascript" type="text/javascript" src="js/jquery.flot.axislabels.js"></script>
   </head>
   <body>
-    <table  id="messageTable" style="width:50%">
-      <thead>
-        <tr class="centeredCell">
-          <th style="width:32px"></th>
-          <th style="width:27%">Received</th>
-          <th>Type</th>
-          <th style="width:10%">Channel</th>
-        </tr>
-      </thead>
-      <tbody>
-      </tbody>
-    </table>
+    <div id="container"></div>
+      <div id="messages">
+        <script src="messages.js"></script>
+      </div>
+      <div id="graph">
+      </div>
+    </div>
+    <script>
+      var node = document.getElementById('messages');
+      var app = Elm.Main.embed(node);
+
+      app.ports.graphData.subscribe(function(data) {
+        $.plot($("#graph"), data);
+      });
+    </script>
   </body>
 </html>

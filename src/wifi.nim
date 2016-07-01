@@ -2,6 +2,8 @@
 
 import esp8266 as mcu
 
+import faults
+
 import settings
 
 type
@@ -76,12 +78,14 @@ const
 
 proc system_os_post*(prio: uint8; signal: uint32; param: uint32) {.importc: "system_os_post".}
 
-proc wifi_set_opmode(mode: byte) {.importc.}
+proc wifi_set_opmode(mode: byte): bool {.importc.}
 proc wifi_get_ip_info(if_index: byte; info: pointer) {.importc.}
 
 proc wifi_station_set_config(conf: ptr StationConfig) {.importc.}
+proc wifi_station_set_config_current(conf: ptr StationConfig): bool {.importc.}
 
-proc wifi_station_connect() {.importc.}
+proc wifi_station_connect(): bool {.importc.}
+proc wifi_station_disconnect(): bool {.importc.}
 
 proc espconn_create(conn: ptr EspConn) {.importc.}
 proc espconn_connect(conn: ptr EspConn) {.importc.}
@@ -92,7 +96,10 @@ proc espconn_regist_recvcb(conn: ptr EspConn; recv_cb: pointer) {.importc.}
 proc os_delay_us(n: int) {.importc: "ets_delay_us", header: "<osapi.h>".}
 
 proc wifi_station_get_connect_status(): int {.importc.}
+proc wifi_station_set_auto_connect(set: byte): bool {. importc .}
+proc wifi_station_set_reconnect_policy(set: bool): bool {. importc .}
 
+proc wifi_station_set_hostname(name: cstring): bool {. importc .}
 
 var conf : StationConfig
 
@@ -133,18 +140,6 @@ proc recv_cb(arg: pointer; data: pointer; len: uint16) {.exportc, section : ROM.
     receiv = true
 
 
-proc start() {. section: ROM .} =
-    wifi_set_opmode(STATION_MODE)
-
-    copyMem(addr(conf.ssid), SSID, SSID.len)
-    copyMem(addr(conf.password), PASS, PASS.len)
-
-    wifi_station_set_config(addr(conf))
-    wifi_station_connect()
-
-
-
-
 
 proc send(buf: var openArray[byte]; length: int) {. section: ROM .} =
     var info : IpInfo
@@ -173,4 +168,94 @@ proc send(buf: var openArray[byte]; length: int) {. section: ROM .} =
         espconn_sent(addr(conn), addr(buf), uint16(length))
 
 
-export start, send
+
+
+
+type
+    Configuration* = object
+        hostName*: cstring
+        ssid*: cstring
+        password*: cstring
+        case matchBSSID*: bool
+            of true: bssid*: array[6,byte]
+            of false: nil
+        autoConnect*: bool
+        reconnect*: bool
+
+
+var
+    initialized: bool = false
+
+
+
+proc setup*(config: Configuration): Faultable[void] {. section: ROM .} =
+    if initialized:
+        raiseAssert("WiFi already set up!")
+
+    if not wifi_set_opmode(STATION_MODE):
+        return failure[void](ExampleFault)
+
+    var conf : StationConfig
+
+    copyMem(addr(conf.ssid),config.ssid, config.ssid.len)
+    copyMem(addr(conf.password), config.password, config.password.len)
+
+    if config.matchBSSID:
+        conf.bssid_set = 1
+        conf.bssid = config.bssid
+
+    if config.hostName != nil:
+        if not wifi_station_set_hostname(config.hostName):
+            return failure[void](ExampleFault)
+
+    if not wifi_station_set_auto_connect(0):
+        return failure[void](ExampleFault)  # TODO: do this somewhere else
+
+    if not wifi_station_set_reconnect_policy(config.reconnect):
+        return failure[void](ExampleFault)
+
+    if not wifi_station_set_config_current(addr(conf)):
+        return failure[void](ExampleFault)
+
+    if config.autoConnect:
+        if not wifi_station_connect():
+            return failure[void](ExampleFault)
+
+    initialized = true
+    return success[void](void)
+
+
+proc connect*(): Faultable[void] {. section: ROM .} =
+    if not initialized:
+        raiseAssert("WiFi not set up!")
+
+    if not wifi_station_connect():
+        return failure[void](ExampleFault)
+    else:
+        return success[void](void)
+
+
+proc disconnect*(): Faultable[void] {. section: ROM .} =
+    if not initialized:
+        raiseAssert("WiFi not set up!")
+
+    if not wifi_station_disconnect():
+        return failure[void](ExampleFault)
+    else:
+        return success[void](void)
+
+
+
+
+proc status*(): StationStatus {. section: ROM .} =
+    return cast[StationStatus](wifi_station_get_connect_status())
+
+
+proc stop() {. section: ROM .} =
+    # put modem to sleep here?
+    discard
+
+
+
+
+export send

@@ -2,8 +2,7 @@
 
 import esp8266 as mcu
 
-import macros
-import typeinfo
+import settings
 
 import faults
 
@@ -11,6 +10,8 @@ import communications as com
 
 import gpio
 import wifi
+
+import pwm
 
 type
     TTestStruct2 = object
@@ -48,8 +49,6 @@ proc os_delay_us(n: int) {.importc: "ets_delay_us", header: "<osapi.h>".}
 
 proc uart_init(x, y: int) {. importc: "uart_init" .}
 
-proc uart0_tx_buffer(data: pointer; len: uint16) {. importc: "uart0_tx_buffer" .}
-
 
 type
   ETSSignal* = uint32
@@ -73,10 +72,10 @@ var count {.volatile.} : int = 0
 var timer {.volatile.} : ETSTimer
 
 proc timer_func(timer_arg: pointer) {. section: ROM, exportc: "timer_func".} =
-    #if count mod 2 == 0:
-    #    gpio.set(1 shl 2, 0, 1 shl 2, 0)
-    #else:
-    #    gpio.set(0, 1 shl 2, 1 shl 2, 0)
+    if count mod 2 == 0:
+        gpio.set(1 shl 5, 0, 1 shl 5, 0)
+    else:
+        gpio.set(0, 1 shl 5, 1 shl 5, 0)
 
     count += 1
 
@@ -110,7 +109,18 @@ proc doRiskyOperation(x: int): Faultable[int] =
 
 
 proc user_procTask(events: ptr ETSEvent) {. section: ROM, exportc: "user_procTask".} =
-    if num mod 500 == 0:
+    if num == 2:
+        let result = wifi.connect()
+
+        if ?result:
+            debug("Wifi connected!")
+        else:
+            debug("Wifi failed to connect...")
+
+    pwm_set_duty(uint32(num mod 2200), 0)
+    pwm_start()
+
+    if num mod 5000 == 0:
         var x: TTestStruct
         var buf: array[150,byte]
 
@@ -129,6 +139,7 @@ proc user_procTask(events: ptr ETSEvent) {. section: ROM, exportc: "user_procTas
 
         if ?result:
             wifi.send(buf, bufLen)
+            discard
         else:
             let faultLen = encode(stackTrace(result), buf, transport = Satellite, channel = 0)
             discard stackTrace(result)
@@ -145,8 +156,6 @@ proc main() {. section: ROM .} =
 
     debug("Hello from ESP8266!!!")
 
-    wifi.start()
-
     gpio.init()
 
     if not mcu.updateFrequency(80):
@@ -156,15 +165,44 @@ proc main() {. section: ROM .} =
     mcu.printMemInfo()
     debug("====== MEMINFO ======")
 
-    #gpio.func_select(0x60000800 + 0x38, 0)
+    os_delay_us(1000 * 100)
 
-    #gpio.set(1 shl 2, 0, 1 shl 2, 0)
+    let config = wifi.Configuration(hostName: "ESP8266",
+        ssid: settings.SSID,
+        password: settings.PASS,
+        matchBSSID: false,
+        autoConnect: false,
+        reconnect: true)
+
+    let setupResult = wifi.setup(config)
+
+    if not ?setupResult:
+        debug("Wifi setup error!")
+
+    gpio.func_select(0x60000800 + 0x40, 0)
+
+    gpio.set(1 shl 5, 0, 1 shl 5, 0)
+
+    var period = 100'u32  # 1 / us
+    var duty : array[1, uint32] = [1000'u32]
+
+    var PWM_0_OUT_IO_MUX = uint32(0x60000800 + 0x38)
+    var PWM_0_OUT_IO_NUM = 2'u32
+    var PWM_0_OUT_IO_FUNC = 0'u32
+
+    var params : array[3, uint32] = [PWM_0_OUT_IO_MUX, PWM_0_OUT_IO_NUM, PWM_0_OUT_IO_FUNC]
+
+    pwm_init(period, addr(duty[0]), 1, addr(params[0]))
+    pwm_start()
 
     os_timer_disarm(addr(timer))
 
     os_timer_setfn(addr(timer), timer_func, nil)
 
     os_timer_arm(addr(timer), 100, 1, 1)
+
+
+
 
     system_os_task(user_procTask, 0, addr(event), 1)
     system_os_post(0, 0, 0)
