@@ -131,7 +131,7 @@ proc user_procTask(events: ptr ETSEvent) {. section: ROM, exportc: "user_procTas
         x.nested.z = uint32(mcu.rtcTime())
         x.nested.sz = int16(packedSize(x))
 
-        let bufLen = encode(x, buf, transport = WiFi, channel = 5)
+        let bufLen = encode(x, buf, transport = WiFi)
 
         # do something that might fail
 
@@ -141,7 +141,7 @@ proc user_procTask(events: ptr ETSEvent) {. section: ROM, exportc: "user_procTas
             wifi.send(buf, bufLen)
             discard
         else:
-            let faultLen = encode(stackTrace(result), buf, transport = Satellite, channel = 0)
+            let faultLen = encode(stackTrace(result), buf, transport = Satellite)
             discard stackTrace(result)
             wifi.send(buf, faultLen)
 

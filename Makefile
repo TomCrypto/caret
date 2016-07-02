@@ -34,8 +34,8 @@ NIM_ARGS      := --path:$(SRCDIR) \
 NODE          := node
 STATION_ROOT  := $(SRCDIR)/station
 STATION_WWW   := $(STATION_ROOT)/public
-STATION_DB    := $(STATION_ROOT)/database
-STATION_SRC   := $(STATION_ROOT)/server
+#STATION_DB    := $(STATION_ROOT)/database
+STATION_SRC   := $(STATION_ROOT)
 
 # Hardware settings below
 

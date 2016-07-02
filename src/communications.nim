@@ -96,7 +96,7 @@ type
 # TODO: make this safe to overflows?
 
 
-proc encode[T](message: T; dest: var openArray[byte]; channel: byte; transport: Transport; flags: set[MessageFlag] = {}): int =
+proc encode[T](message: T; dest: var openArray[byte]; transport: Transport; flags: set[MessageFlag] = {}): int =
     var bom : uint16 = BOM
 
     if packedSize(message) == 0:
@@ -105,8 +105,10 @@ proc encode[T](message: T; dest: var openArray[byte]; channel: byte; transport: 
     copyMem(addr(dest[0]), addr(bom), sizeof(bom))
 
     dest[1] = VER or (cast[byte](transport) shl 2) or (cast[byte](flags) shl 4)
-    dest[2] = messageID(T)
-    dest[3] = channel
+
+    var msgType : uint16 = messageID(T)
+
+    copyMem(addr(dest[2]), addr(msgType), sizeof(uint16))
 
     return 4 + pack(message, 4, dest)
 
