@@ -5,9 +5,17 @@ var env = "test"; // for now
 const config = require('./config')[env];
 
 const path = require('path');
+var mailer = require("nodemailer");
 
 
 const storage = require('./storage');
+
+
+const Promise = require('bluebird');
+const protocol = require('./protocol');
+
+const frontend = require('./frontend');
+const backend = require('./backend');
 
 
 
@@ -18,6 +26,7 @@ storage.openDatabase({
 });
 
 
+
 var nedb = require('nedb');
 var datastore = new nedb({
     filename: path.join(databaseDir, config.root, config.filename)
@@ -26,109 +35,16 @@ var datastore = new nedb({
 datastore.loadDatabase();
 
 
+/* Config options - move to config.js later */
 
+config.frontend = {
+    port: 3000,
+    address: '0.0.0.0',
+    ssl: undefined,
+    rootDir: publicDir
+};
 
-
-var WebSocketServer = require("websocket").server;
-var http = require('http');
-
-
-
-var httpServer = http.createServer(function(request, response) {
-    console.log((new Date()) + ' Received request for ' + request.url);
-    response.writeHead(404);
-    response.end();
-});
-
-httpServer.listen(8080, function() {
-    console.log((new Date()) + ' Server is listening on port 8080');
-});
-
-wsServer = new WebSocketServer({
-    httpServer: httpServer,
-    // You should not use autoAcceptConnections for production
-    // applications, as it defeats all standard cross-origin protection
-    // facilities built into the protocol and the browser.  You should
-    // *always* verify the connection's origin and decide whether or not
-    // to accept it.
-    autoAcceptConnections: false
-});
-
-function originIsAllowed(origin) {
-  // put logic here to detect whether the specified origin is allowed.
-  return true;
-}
-
-
-var HashMap = require('hashmap');
-
-var connections = new HashMap();
-
-
-wsServer.on('request', function(request) {
-    if (!originIsAllowed(request.origin)) {
-      // Make sure we only accept requests from an allowed origin
-      request.reject();
-      console.log((new Date()) + ' Connection from origin ' + request.origin + ' rejected.');
-      return;
-    }
-
-    var connection = request.accept('', request.origin);
-    console.log((new Date()) + ' Connection accepted.');
-    connections.set(connection, true);
-    connection.on('message', function(message) {
-        if (message.type === 'utf8') {
-            console.log('Received Message: ' + message.utf8Data);
-            connection.sendUTF(message.utf8Data);
-        }
-        else if (message.type === 'binary') {
-            console.log('Received Binary Message of ' + message.binaryData.length + ' bytes');
-            connection.sendBytes(message.binaryData);
-        }
-    });
-    connection.on('close', function(reasonCode, description) {
-        console.log((new Date()) + ' Peer ' + connection.remoteAddress + ' disconnected.');
-        connections.remove(connection);
-    });
-});
-
-
-
-
-
-
-
-
-
-var express = require('express');
-var app = express();
-app.use('/', express.static(publicDir)); // ← adjust
-app.listen(3000, function() { console.log('web server listening'); });
-
-app.get('/messages', (req, res) => {
-    var date = new Date(req.query.since);
-    var offset = parseInt(req.query.offset);
-    var count = parseInt(req.query.count);
-
-    datastore.find({received: { $gt: date }}).sort({received: 1}).skip(offset).limit(count).exec((err, docs) => {
-        res.json(docs);
-    });
-});
-
-
-
-
-
-
-const Promise = require('bluebird');
-
-const protocol = require('./protocol');
-
-const backend = require('./backend');
-
-config.backend = {};
-
-config.backend.endpoints = [
+config.backend = [
     {
         protocol: backend.Endpoint.UDP,
         options: {
@@ -147,18 +63,27 @@ config.backend.endpoints = [
     }
 ];
 
+/* end config options */
+
+frontend.setup(config.frontend).then((frontend) => {
+    console.log("Front-end ready!");
+    console.log(frontend);
+}).catch((err) => {
+    console.log("Front-end error!");
+    console.log(err);
+});
 
 
-
-backend.setup(config.backend.endpoints, {
-    receive: (message) => {
-        console.log(message);
-    },
-    problem: (problem) => {
-        console.log(problem);
-    }
-}).then((backend) => {
+backend.setup(config.backend).then((backend) => {
     console.log("ready to send!");
+
+    backend.on('message', (message) => {
+        console.log(message);
+    })
+
+    backend.on('error', (error) => {
+        console.log(error);
+    });
 
     /*backend.send(null, null, protocol.TransportLayer.WiFi).catch((err) => {
         console.log("FAILED TO SEND!!!");
@@ -166,16 +91,10 @@ backend.setup(config.backend.endpoints, {
     }).done();*/
 
     //backend.close().done();
-
-
 }).catch((err) => {
     console.log("FAIL!");
     console.log(err);
 });
-
-
-
-
 
 /* general flow:
 
@@ -184,8 +103,38 @@ backend.setup(config.backend.endpoints, {
 3. initialize back-end service, with no handlers
 4. hook up front-end handlers to back-end and DB
 5. hook up back-end handlers to front-end and DB
-6. start both services
 
-this requires slight refactoring of backend.js
+*/
+
+
+
+
+
+
+
+
+// TODO: this is how emails can be sent (put in a utility class?)
+
+/*
+
+var smtpTransport = mailer.createTransport(config.email.smtp);
+
+var mail = {
+    from: "test@test.com", // kind of needs to be the same user as config.email.smtp anyway
+    to: config.email.admin,
+    subject: "subject",
+    text: "hello world",
+    html: "<b>hello world</b>"
+}
+
+smtpTransport.sendMail(mail, (error) => {
+    if(error){
+        console.log(error);
+    }else{
+        console.log("Message sent!");
+    }
+
+    // smtpTransport.close();
+});
 
 */

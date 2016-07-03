@@ -12,12 +12,13 @@ const protocol = require('./protocol');
 
 const udp = {};
 
-udp.createInstance = (server, options, callbacks) => {
+udp.createInstance = (server, options) => {
     const object = {
         server: server,
         options: options,
         targets: options.targets,
-        callbacks: callbacks,
+        messageCb: null,
+        errorCb: null,
     };
 
     object.send = (...args) => udp.send(object, ...args);
@@ -31,7 +32,9 @@ udp.receive = (object, packet, remoteInfo) => {
 
     message.received = new Date(); // TODO: abstract this away?
 
-    object.callbacks.receive(message);
+    if (object.messageCb !== null) {
+        object.messageCb(message);
+    }
 };
 
 udp.send = (object, message, type, transport) => {
@@ -52,7 +55,7 @@ udp.close = (object) => {
     });
 };
 
-const udpEndpoint = function(options, callbacks) {
+const udpEndpoint = function(options) {
     return new Promise((fulfill, reject) => {
         const server = dgram.createSocket(options.ipv6 ? 'udp6' : 'udp4');
 
@@ -60,15 +63,18 @@ const udpEndpoint = function(options, callbacks) {
         server.on('error', (err) => reject(err));
 
         server.bind(options.recv.port, options.recv.address, () => {
-            fulfill(udp.createInstance(server, options, callbacks));
+            fulfill(udp.createInstance(server, options));
         });
     }).then((object) => {
         object.server.on('message', (packet, remoteInfo) => {
             udp.receive(object, packet, remoteInfo);
         });
 
-        // reset error callback with the correct back-end callback
-        object.server.on('error', (err) => callbacks.problem(err));
+        object.server.on('error', (err) => {
+            if (object.errorCb !== null) {
+                object.errorCb(err);
+            }
+        });
 
         return object;
     });
@@ -78,9 +84,9 @@ const udpEndpoint = function(options, callbacks) {
 /* ==== Main function that sets up back-end message routing.           ==== */
 /* ======================================================================== */
 
-const setup = (endpoints, callbacks) => {
+const setup = (endpoints) => {
     return Promise.map(endpoints, (endpoint) => {
-        return endpoint.protocol(endpoint.options, callbacks);
+        return endpoint.protocol(endpoint.options);
     }).then((setups) => Promise.all(setups)).then((instances) => {
         return {
             send: (message, type, transport) => {
@@ -100,6 +106,22 @@ const setup = (endpoints, callbacks) => {
                 return Promise.map(instances, (instance) => {
                     return instance.close();
                 }).all();
+            },
+            on: (event, callback) => {
+                switch (event) {
+                    case 'message':
+                        instances.forEach((instance) => {
+                            instance.messageCb = callback;
+                        });
+                        break;
+                    case 'error':
+                        instances.forEach((instance) => {
+                            instance.errorCb = callback;
+                        });
+                        break;
+                    default:
+                        throw new Error(Errors.noSuchEvent(event));
+                }
             }
         };
     });
@@ -112,6 +134,9 @@ const setup = (endpoints, callbacks) => {
 const Errors = {
     noEndpoint: (transport) => {
         return `Message not sent: no endpoint can assume ${transport} delivery.`;
+    },
+    noSuchEvent: (event) => {
+        return `No such event '${event}'.`;
     }
 };
 
