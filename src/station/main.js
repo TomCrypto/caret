@@ -18,23 +18,6 @@ const frontend = require('./frontend');
 const backend = require('./backend');
 
 
-
-storage.openDatabase({
-    filename: path.join(databaseDir, config.root, config.filename),
-}, (err) => {
-
-});
-
-
-
-var nedb = require('nedb');
-var datastore = new nedb({
-    filename: path.join(databaseDir, config.root, config.filename)
-});
-
-datastore.loadDatabase();
-
-
 /* Config options - move to config.js later */
 
 config.frontend = {
@@ -64,6 +47,14 @@ config.backend = [
 ];
 
 /* end config options */
+
+storage.openDatabase({
+    filename: path.join(databaseDir, config.root, config.filename),
+}).then((db) => {
+    console.log("Database opened!");
+}).catch((err) => {
+    console.log("Database error!");
+});
 
 frontend.setup(config.frontend).then((frontend) => {
     console.log("Front-end ready!");

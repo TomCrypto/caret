@@ -1,34 +1,30 @@
-// DB load/save logic (including query filters)
-
-
-
 var nedb = require('nedb');
 
 
-var openDatabase = function(options, ready) {
-    var datastore = new nedb({
-        filename: options.filename,
-        autoload: true,
-        onload: (err) => {
-            ready(err);
-        }
-    });
+const openDatabase = (options) => {
+    return new Promise((fulfill, reject) => {
+        var datastore = new nedb({
+            filename: options.filename,
+            autoload: true,
+            onload: (err) => {
+                if (err) {
+                    reject(err);
+                } else {
+                    const db = {
+                        saveMessage: function(message) {
+                            datastore.insert(message);
+                            options.callback(message);
+                        }
+                    };
 
-    return {
-        saveMessage: function(message) {
-            datastore.insert(message);
-            options.callback(message);
-        }
-    };
+                    fulfill(datastore);
+                }
+            }
+        });
+    });
 };
 
-
-
-
-
-
-
-
+/* ======================================================================== */
 
 module.exports = {
     openDatabase: openDatabase,

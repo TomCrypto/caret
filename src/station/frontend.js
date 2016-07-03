@@ -27,6 +27,9 @@ const setup = (options) => {
             frontend.server = http.createServer(app);
         }
 
+        /* TODO: move this to individual endpoints */
+        /* and also report failure somehow? */
+
         require('express-ws')(app, frontend.server);
 
         app.use('/', express.static(options.rootDir));
