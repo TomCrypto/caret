@@ -1,7 +1,8 @@
 var nedb = require('nedb');
+var mailer = require("nodemailer");
 
 
-const openDatabase = (options) => {
+const setup = (options) => {
     return new Promise((fulfill, reject) => {
         var datastore = new nedb({
             filename: options.filename,
@@ -27,5 +28,31 @@ const openDatabase = (options) => {
 /* ======================================================================== */
 
 module.exports = {
-    openDatabase: openDatabase,
+    setup: setup,
 };
+
+// TODO: this is how emails can be sent (put in a utility class?)
+
+/*
+
+var smtpTransport = mailer.createTransport(config.email.smtp);
+
+var mail = {
+    from: "test@test.com", // kind of needs to be the same user as config.email.smtp anyway
+    to: config.email.admin,
+    subject: "subject",
+    text: "hello world",
+    html: "<b>hello world</b>"
+}
+
+smtpTransport.sendMail(mail, (error) => {
+    if(error){
+        console.log(error);
+    }else{
+        console.log("Message sent!");
+    }
+
+    // smtpTransport.close();
+});
+
+*/
