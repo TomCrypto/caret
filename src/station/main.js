@@ -1,31 +1,43 @@
-const config = require('./config')["test"]; // TODO: improve command line arguments
-
-const Promise = require('bluebird');
-
-const storage  = require('./storage');
+const services = require('./services');
 const protocol = require('./protocol');
 const frontend = require('./frontend');
 const backend  = require('./backend');
+
+const Promise = require('bluebird');
 
 /* ======================================================================== */
 /* ==== Main function that encodes all high-level application logic.   ==== */
 /* ======================================================================== */
 
+const config = require('./config')["test"]; // TODO: improve command line arguments
+
 Promise.all([
-    storage.setup(config.storage),
+    services.setup(config.services),
     frontend.setup(config.frontend),
     backend.setup(config.backend),
-]).then(([database, frontend, backend]) => {
+]).then(([services, frontend, backend]) => {
+
     backend.on('message', (message) => {
-        /* TODO:
-         *
-         * 1. write message to storage
-         * 2. optionally send out notification?
-         * 3. send to front-end
-        */
+
+        // TODO: save to database!
+        //services.saveMessage(message);
+
+        if (config.notifications.email.shouldNotify(message)) {
+            services.sendEmail(message, config.notifications.email.recipient).catch((err) => {
+                console.log(err); // error handling
+            });
+        }
+
+        if (config.notifications.sms.shouldNotify(message)) {
+            services.sendSMS(message, config.notifications.sms.recipient).catch((err) => {
+                console.log(err); // error handling
+            });
+        }
+
+        // TODO: send message to front-end
 
         console.log(message);
-    })
+    });
 
     backend.on('error', (error) => {
         /* TODO: better error handling */
@@ -33,6 +45,7 @@ Promise.all([
     });
 
     /* TODO: hook up front-end to back-end through service events */
+    /* e.g. endpoint that sends out message through back-end */
 }).catch((err) => {
     throw err;
 }).done();

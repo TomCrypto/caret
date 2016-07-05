@@ -173,7 +173,8 @@ function decode(buffer) {
 
     return {
         type:     messageType.name,
-        origin:   messageOrig,
+        source:   messageOrig,
+        flags:    Flags.None,
         message:  message
     }
 }
@@ -184,6 +185,17 @@ function encode(message, type, source, flags = Flags.None) {
 }
 
 
+function flagsToString(flags) {
+    const flagList = [];
+
+    // TODO: here
+
+    if (flagList.length > 0) {
+        return JSON.stringify(flagList);
+    } else {
+        return "(no protocol flags)";
+    }
+};
 
 
 
@@ -198,4 +210,5 @@ module.exports = {
     TransportLayer: TransportLayer,
     MessageType: MessageType,
     Flags: Flags,
+    flagsToString: flagsToString,
 };
