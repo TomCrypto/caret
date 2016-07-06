@@ -1,26 +1,58 @@
-const nedb = require('nedb');
 const Promise = require('bluebird');
 
-const protocol = require('./protocol');
+/* ======================================================================== */
+/* ==== External message store implementation using ElasticSearch.     ==== */
+/* ======================================================================== */
 
-// TODO: implement database service
+const elasticsearch = require('elasticsearch');
+const nStore = require('nstore');
+const path = require('path');
 
-/*
-var datastore = new nedb({
-filename: options.filename,
-autoload: true,
-onload: (err) => ...
+const storeSetup = (options) => {
+    const search = new elasticsearch.Client({
+        host: options.search.hostname,
+        log: options.search.logging,
+    });
 
-saveMessage: function(message) {
-    datastore.insert(message);
-}
-*/
+    const stores = {
+        messages: nStore.new(path.join(options.storePath, 'messages'))
+    };
+
+    return {
+        search: search,
+        stores: stores,
+    };
+};
+
+const storeMessage = (store, message) => {
+    const key = store.stores.messages.length + 1;
+
+    const backupMessage = new Promise((fulfill, reject) => {
+        store.stores.messages.save(key, message, (err) => {
+            err ? reject(err) : fulfill();
+        });
+    });
+
+    const indexMessage = new Promise((fulfill, reject) => {
+        store.search.create({
+            index: 'messages',
+            type: message.type,
+            id: key.toString(),
+            body: message,
+        }, (err) => {
+            err ? reject(err) : fulfill();
+        });
+    });
+
+    return Promise.all([backupMessage, indexMessage]);
+};
 
 /* ======================================================================== */
 /* ==== External email service implementation using NodeMailer.        ==== */
 /* ======================================================================== */
 
 const mailer = require('nodemailer');
+const protocol = require('./protocol');
 
 const formatMessageForEmail = (message) => {
     const parts = [];
@@ -120,11 +152,12 @@ const setup = (options) => {
     return Promise.all([
         emailSetup(options.email),
         smsSetup(options.sms),
-        // TODO: database
-    ]).then(([email]) => {
+        storeSetup(options.store),
+    ]).then(([email, sms, store]) => {
         return { // TODO: has to be a better way to do this!
             sendEmail: (message, recipient) => {return emailSend(email, message, recipient);},
-            sendSMS: (message, recipient) => {return smsSend(sms, message, recipient);}
+            sendSMS: (message, recipient) => {return smsSend(sms, message, recipient);},
+            storeMessage: (message) => {return storeMessage(store, message);},
             // TODO: database functions
         };
     });

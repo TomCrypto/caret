@@ -6,10 +6,25 @@ const backend  = require('./backend');
 const Promise = require('bluebird');
 
 /* ======================================================================== */
-/* ==== Main function that encodes all high-level application logic.   ==== */
+/* ==== Command-line argument parsing (e.g. selected environment).     ==== */
 /* ======================================================================== */
 
-const config = require('./config')["test"]; // TODO: improve command line arguments
+// TODO: better argument parsing?
+
+if (process.argv.length !== 3) {
+    console.log(`Usage:\n\t${process.argv[0]} ${process.argv[1]} <ENV>`);
+    return;
+};
+
+if (require('./config')[process.argv[2]] === undefined) {
+    throw new Error(`Unknown environment '${process.argv[2]}'.`);
+}
+
+const config = require('./config')[process.argv[2]];
+
+/* ======================================================================== */
+/* ==== Main function that encodes all high-level application logic.   ==== */
+/* ======================================================================== */
 
 Promise.all([
     services.setup(config.services),
@@ -19,8 +34,7 @@ Promise.all([
 
     backend.on('message', (message) => {
 
-        // TODO: save to database!
-        //services.saveMessage(message);
+        services.storeMessage(message);
 
         if (config.notifications.email.shouldNotify(message)) {
             services.sendEmail(message, config.notifications.email.recipient).catch((err) => {
