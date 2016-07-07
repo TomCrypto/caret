@@ -25,6 +25,9 @@ type
         num2: float64
         nested: TTestStruct2
 
+    TPWM = object
+        duty: uint32
+
 
 
 type
@@ -117,8 +120,14 @@ proc user_procTask(events: ptr ETSEvent) {. section: ROM, exportc: "user_procTas
         else:
             debug("Wifi failed to connect...")
 
-    pwm_set_duty(uint32(num mod 2200), 0)
-    pwm_start()
+    if wifi.hasPacket:
+        var msg: TPWM
+
+        var header = com.header(wifi.recvBuffer)
+        com.decode(wifi.recvBuffer, msg)
+
+        pwm_set_duty(msg.duty, 0)
+        pwm_start()
 
     if num mod 5000 == 0:
         var x: TTestStruct

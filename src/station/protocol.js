@@ -1,12 +1,4 @@
-// encoding/decoding logic of messages
-
-const constants = require('./constants');
-
 const pack = require('bufferpack');
-
-
-/* TODO: implement these somehow */
-
 
 function parseIP(ipInteger) {
     var a = (ipInteger >>  0) & 0xFF;
@@ -17,15 +9,22 @@ function parseIP(ipInteger) {
     return `${a}.${b}.${c}.${d}`;
 }
 
+var Errors = {
+    ExampleFault: 'Something went wrong'
+};
 
+var Files = {
+    Main: 'main.nim',
+    Wifi: 'wifi.nim',
+};
 
 var ErrorMap = {
-    0x0000: constants.Errors.ExampleFault,
+    0x0000: Errors.ExampleFault,
 };
 
 var FileMap = {
-    0x0000: constants.Files.Main,
-    0x0001: constants.Files.Wifi,
+    0x0000: Files.Main,
+    0x0001: Files.Wifi,
 };
 
 
@@ -45,7 +44,7 @@ var TransportLayerMap = {
 }
 
 var Flags = {
-    None: 1 << 0,
+    None: 0,
 };
 
 
@@ -102,12 +101,27 @@ var MessageType = {
             // TODO: implement
             return undefined;
         }
+    },
+    PulseWidthMessage: {
+        name: "PulseWidthMessage",
+        format: 'L',
+        encode: (message) => {
+            return [message.duty];
+        }
     }
 }
 
+
+const setID = (id, obj) => {
+    obj.id = id;
+    return obj;
+}
+
+
 var MessageTypeMap = {
-    0x0002: MessageType.TestMessage,
-    0x0004: MessageType.FaultMessage,
+    0x0002: setID(0x0002, MessageType.TestMessage),
+    0x0004: setID(0x0004, MessageType.FaultMessage),
+    0x00FF: setID(0x00FF, MessageType.PulseWidthMessage),
 }
 
 
@@ -181,7 +195,20 @@ function decode(buffer) {
 
 
 function encode(message, type, source, flags = Flags.None) {
-    throw new Error("Encode not implemented yet!"); // todo
+    const endian = '<';
+
+    const data = type.encode(message);
+    const buffer = packRawData(data, type.format, endian);
+
+    const sourceBits = TransportLayerMap[source];
+    const flagBits   = parseInt(flags) & 0xF;
+
+    const header = Buffer.alloc(4);
+    header.writeUInt8(0x00, 0);
+    header.writeUInt8(PROTOCOL_VERSION | (sourceBits << 2) | (flagBits << 4), 1);
+    header.writeUInt16LE(type.id, 2);
+
+    return Buffer.concat([header, buffer]);
 }
 
 

@@ -2,57 +2,60 @@ const dgram = require('dgram');
 const Promise = require('bluebird');
 const protocol = require('./protocol');
 
+const helpers = require('./helpers');
+
 // TODO: am I using promises right here for send() and close()?
 
 /* ======================================================================== */
 /* ==== Back-end endpoint implementation using UDP.                    ==== */
 /* ======================================================================== */
 
-// TODO: this isn't the right way to create an object, review this
+udpCreateInstance = (server, options) => {
+    const callbacks = {};
 
-const udp = {};
+    const udp = {
+        receive: (packet, remoteInfo) => {
+            var message = protocol.decode(packet);
 
-udp.createInstance = (server, options) => {
-    const object = {
-        server: server,
-        options: options,
-        targets: options.targets,
-        messageCb: null,
-        errorCb: null,
+            message.received = helpers.getLocalDate(); // TODO: where to put this?
+
+            if (callbacks['message'] !== undefined) {
+                callbacks['message'](message);
+            }
+        },
+        send: (message, type, transport) => {
+            return new Promise((fulfill, reject) => {
+                const buffer = protocol.encode(message, type, transport, options.flags);
+
+                server.send(buffer, port     = options.send.port,
+                                    address  = options.send.address,
+                                    callback = (err) => {
+                    (err === null) ? fulfill() : reject(err);
+                });
+            });
+        },
+        close: () => {
+            return new Promise((fulfill, reject) => {
+                server.close(() => fulfill());
+            });
+        },
+        on: (event, callback) => {
+            callbacks[event] = callback;
+        },
+        targets: options.targets
     };
 
-    object.send = (...args) => udp.send(object, ...args);
-    object.close = (...args) => udp.close(object, ...args);
-
-    return object;
-};
-
-udp.receive = (object, packet, remoteInfo) => {
-    var message = protocol.decode(packet);
-
-    message.received = new Date(); // TODO: abstract this away?
-
-    if (object.messageCb !== null) {
-        object.messageCb(message);
-    }
-};
-
-udp.send = (object, message, type, transport) => {
-    return new Promise((fulfill, reject) => {
-        const buffer = protocol.encode(message, type, transport, object.options.flags);
-
-        object.server.send(buffer, port     = object.options.send.port,
-                                   address  = object.options.send.address,
-                                   callback = (err) => {
-            (err === null) ? fulfill() : reject(err);
-        });
+    server.on('message', (packet, remoteInfo) => {
+        udp.receive(packet, remoteInfo);
     });
-};
 
-udp.close = (object) => {
-    return new Promise((fulfill, reject) => {
-        object.server.close(() => fulfill());
+    server.on('error', (err) => {
+        if (callbacks['error'] !== undefined) {
+            callbacks['error'](err);
+        }
     });
+
+    return udp;
 };
 
 const udpEndpoint = function(options) {
@@ -63,20 +66,8 @@ const udpEndpoint = function(options) {
         server.on('error', (err) => reject(err));
 
         server.bind(options.recv.port, options.recv.address, () => {
-            fulfill(udp.createInstance(server, options));
+            fulfill(udpCreateInstance(server, options));
         });
-    }).then((object) => {
-        object.server.on('message', (packet, remoteInfo) => {
-            udp.receive(object, packet, remoteInfo);
-        });
-
-        object.server.on('error', (err) => {
-            if (object.errorCb !== null) {
-                object.errorCb(err);
-            }
-        });
-
-        return object;
     });
 };
 
@@ -108,20 +99,9 @@ const setup = (endpoints) => {
                 }).all();
             },
             on: (event, callback) => {
-                switch (event) {
-                    case 'message':
-                        instances.forEach((instance) => {
-                            instance.messageCb = callback;
-                        });
-                        break;
-                    case 'error':
-                        instances.forEach((instance) => {
-                            instance.errorCb = callback;
-                        });
-                        break;
-                    default:
-                        throw new Error(Errors.noSuchEvent(event));
-                }
+                instances.forEach((instance) => {
+                    instance.on(event, callback);
+                });
             }
         };
     });

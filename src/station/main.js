@@ -2,31 +2,15 @@ const services = require('./services');
 const protocol = require('./protocol');
 const frontend = require('./frontend');
 const backend  = require('./backend');
+const helpers  = require('./helpers');
 
 const Promise = require('bluebird');
-
-/* ======================================================================== */
-/* ==== Command-line argument parsing (e.g. selected environment).     ==== */
-/* ======================================================================== */
-
-// TODO: better argument parsing?
-
-if (process.argv.length !== 3) {
-    console.log(`Usage:\n\t${process.argv[0]} ${process.argv[1]} <ENV>`);
-    return;
-};
-
-if (require('./config')[process.argv[2]] === undefined) {
-    throw new Error(`Unknown environment '${process.argv[2]}'.`);
-}
-
-const config = require('./config')[process.argv[2]];
 
 /* ======================================================================== */
 /* ==== Main function that encodes all high-level application logic.   ==== */
 /* ======================================================================== */
 
-Promise.all([
+const main = (config) => Promise.all([
     services.setup(config.services),
     frontend.setup(config.frontend),
     backend.setup(config.backend),
@@ -34,32 +18,67 @@ Promise.all([
 
     backend.on('message', (message) => {
 
-        services.storeMessage(message);
+        services.storeMessage(message).catch((err) => {
+            console.log("Failed to save message!"); // TODO
+        });
 
-        if (config.notifications.email.shouldNotify(message)) {
-            services.sendEmail(message, config.notifications.email.recipient).catch((err) => {
-                console.log(err); // error handling
-            });
-        }
+        services.logEvent('info', 'Received message.', message);
 
-        if (config.notifications.sms.shouldNotify(message)) {
-            services.sendSMS(message, config.notifications.sms.recipient).catch((err) => {
-                console.log(err); // error handling
-            });
-        }
+        // then implement rules such as: if message.flags has emergency, log as emerg, otherwise log as info?
 
         // TODO: send message to front-end
 
         console.log(message);
     });
 
-    backend.on('error', (error) => {
-        /* TODO: better error handling */
-        console.log(error);
+    backend.on('error', (err) => {
+        services.logEvent('error', 'Back-end error.', err);
     });
+
+    /* Remote control test! */
+
+    {
+        var time = 0;
+        var off = false;
+
+        setInterval(() => {
+            time += 1;
+
+            var duty;
+
+            if (off) {
+                duty = 0;
+            } else {
+                duty = Math.floor((0.5 * Math.sin(time * 0.01) + 0.5) * 2200);
+            }
+
+            off = !off;
+
+            backend.send({
+                duty: duty
+            }, protocol.MessageType.PulseWidthMessage, protocol.TransportLayer.WiFi).catch((err) => {
+                console.log("Failed to send test message!");
+                console.log(err);
+            });
+        }, 25);
+    }
+
+    /* end test */
 
     /* TODO: hook up front-end to back-end through service events */
     /* e.g. endpoint that sends out message through back-end */
-}).catch((err) => {
-    throw err;
-}).done();
+});
+
+/* ======================================================================== */
+/* ==== Command-line argument parsing (e.g. selected environment).     ==== */
+/* ======================================================================== */
+
+if (process.argv.length !== 3) {
+    console.log(`Usage:\n\t${process.argv[0]} ${process.argv[1]} <ENV>`);
+} else if (require('./config')[process.argv[2]] === undefined) {
+    throw new Error(`No environment '${process.argv[2]}'.`);
+} else {
+    main(require('./config')[process.argv[2]]).catch((err) => {
+        throw err;
+    }).done();
+}

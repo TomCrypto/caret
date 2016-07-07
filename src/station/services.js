@@ -1,5 +1,7 @@
 const Promise = require('bluebird');
 
+const helpers  = require('./helpers');
+
 /* ======================================================================== */
 /* ==== External message store implementation using ElasticSearch.     ==== */
 /* ======================================================================== */
@@ -15,36 +17,34 @@ const storeSetup = (options) => {
     });
 
     const stores = {
-        messages: nStore.new(path.join(options.storePath, 'messages'))
+        messages: nStore.new(path.join(options.storePath, 'messages')),
+        events: nStore.new(path.join(options.storePath, 'events')),
     };
 
     return {
-        search: search,
-        stores: stores,
+        store: (category, type, data) => {
+            const key = stores.messages.length + 1;
+
+            const backupMessage = new Promise((fulfill, reject) => {
+                stores[category].save(key, data, (err) => {
+                    err ? reject(err) : fulfill();
+                });
+            });
+
+            const indexMessage = new Promise((fulfill, reject) => {
+                search.create({
+                    index: category,
+                    type: type,
+                    id: key.toString(),
+                    body: data,
+                }, (err) => {
+                    err ? reject(err) : fulfill();
+                });
+            });
+
+            return Promise.all([backupMessage, indexMessage]);
+        }
     };
-};
-
-const storeMessage = (store, message) => {
-    const key = store.stores.messages.length + 1;
-
-    const backupMessage = new Promise((fulfill, reject) => {
-        store.stores.messages.save(key, message, (err) => {
-            err ? reject(err) : fulfill();
-        });
-    });
-
-    const indexMessage = new Promise((fulfill, reject) => {
-        store.search.create({
-            index: 'messages',
-            type: message.type,
-            id: key.toString(),
-            body: message,
-        }, (err) => {
-            err ? reject(err) : fulfill();
-        });
-    });
-
-    return Promise.all([backupMessage, indexMessage]);
 };
 
 /* ======================================================================== */
@@ -52,6 +52,76 @@ const storeMessage = (store, message) => {
 /* ======================================================================== */
 
 const mailer = require('nodemailer');
+
+const emailSetup = (options) => {
+    const smtp = mailer.createTransport(options.auth);
+
+    return {
+        smtp: smtp,
+        sender: options.sender,
+        recipient: options.recipient
+    };
+};
+
+const emailSend = (email, recipient, subject, body, priority) => {
+    var mail = {
+        from: email.sender,
+        to: recipient,
+        subject: subject,
+        text: body,
+        priority: priority
+    };
+
+    // TODO: doesn't seem to work with promisify()??
+
+    return new Promise((fulfill, reject) => {
+        email.smtp.sendMail(mail, (err) => {
+            err ? reject(err) : fulfill();
+        });
+    });
+};
+
+/* ======================================================================== */
+/* ==== External SMS service implementation using Twilio.              ==== */
+/* ======================================================================== */
+
+const twilio = require('twilio');
+
+const smsSetup = (options) => {
+    const client = new twilio.RestClient(options.auth.sid, options.auth.token);
+
+    return {
+        client: client,
+        number: options.number,
+        recipient: options.recipient
+    };
+};
+
+const smsSend = (sms, recipient, body) => {
+    // TODO: use promisify()?
+
+    return new Promise((fulfill, reject) => {
+        sms.client.sendMessage({
+            to: recipient,
+            from: sms.number,
+            body: body,
+        }, function(err) {
+            err ? reject(err) : fulfill();
+        });
+    });
+};
+
+/* ======================================================================== */
+/* ==== Logging service, which uses the other external services.       ==== */
+/* ======================================================================== */
+
+const winston = require('winston');
+const util = require('util');
+
+const syslog = winston.config.syslog.levels;
+
+
+
 const protocol = require('./protocol');
 
 const formatMessageForEmail = (message) => {
@@ -71,39 +141,6 @@ const formatMessageForEmail = (message) => {
     return ['ESP8266 - ' + message.type, parts.join('\n')];
 };
 
-const emailSetup = (options) => {
-    const smtp = mailer.createTransport(options.server);
-
-    return {
-        smtp: smtp,
-        sender: options.sender,
-    };
-};
-
-const emailSend = (email, message, recipient) => {
-    const [subject, body] = formatMessageForEmail(message);
-
-    var mail = {
-        from: email.sender,
-        to: recipient,
-        subject: subject,
-        text: body
-    }
-
-    // TODO: doesn't seem to work with promisify()??
-    return new Promise((fulfill, reject) => {
-        email.smtp.sendMail(mail, (err) => {
-            err ? reject(err) : fulfill();
-        });
-    });
-};
-
-/* ======================================================================== */
-/* ==== External SMS service implementation using Twilio.              ==== */
-/* ======================================================================== */
-
-const twilio = require('twilio');
-
 const formatMessageForText = (message) => {
     const parts = [];
 
@@ -121,26 +158,70 @@ const formatMessageForText = (message) => {
     return parts.join('\n');
 };
 
-const smsSetup = (options) => {
-    const client = new twilio.RestClient(options.auth.sid, options.auth.token);
 
-    return {
-        client: client,
-        number: options.number,
+
+
+const makeEmailTransport = (options, email) => {
+    const EmailTransport = winston.transports.CustomLogger = function() {
+        this.name = 'EmailTransport';
+        this.level = options.level;
     };
+
+    util.inherits(EmailTransport, winston.Transport);
+
+    EmailTransport.prototype.log = (level, msg, meta, callback) => {
+        const body = JSON.stringify(meta, null, 4);
+
+        var priority;
+
+        if (syslog[level] <= syslog.warning) {
+            priority = 'high';
+        } else if (syslog[level] <= syslog.info) {
+            priority = 'normal';
+        } else {
+            priority = 'low';
+        }
+
+        emailSend(email, options.recipient, msg, body, priority).then(() => {
+            callback(null);
+        }).catch((err) => callback(err));
+    };
+
+    return new EmailTransport();
 };
 
-const smsSend = (sms, message, recipient) => {
-    // TODO: use promisify()?
+// TODO: implement makeSMSTransport and makeDatabaseTransport
 
-    return new Promise((fulfill, reject) => {
-        sms.client.sendMessage({
-            to: recipient,
-            from: sms.number,
-            body: formatMessageForText(message)
-        }, function(err) {
-            err ? reject(err) : fulfill();
-        });
+const loggingSetup = (options, email, sms, database) => {
+    const transports = [];
+
+    options.forEach((option) => {
+        switch (option.transport) {
+            case 'email':
+                transports.push(makeEmailTransport(option, email));
+                break;
+            case 'sms':
+                transports.push(makeSMSTransport(option, sms));
+                break;
+            case 'database':
+                transports.push(makeDatabaseTransport(options, database));
+                break;
+            case 'file':
+                transports.push(new winston.transports.File({
+                    timestamp: helpers.getLocalDate,
+                    filename: option.filename,
+                    level: option.level,
+                    json: false,
+                }));
+                break;
+            default:
+                throw new Error(`Unknown transport '${option.name}'.`);
+        }
+    });
+
+    return new(winston.Logger)({
+        transports: transports,
+        levels: syslog,
     });
 };
 
@@ -154,11 +235,27 @@ const setup = (options) => {
         smsSetup(options.sms),
         storeSetup(options.store),
     ]).then(([email, sms, store]) => {
-        return { // TODO: has to be a better way to do this!
-            sendEmail: (message, recipient) => {return emailSend(email, message, recipient);},
-            sendSMS: (message, recipient) => {return smsSend(sms, message, recipient);},
-            storeMessage: (message) => {return storeMessage(store, message);},
-            // TODO: database functions
+        const logging = loggingSetup(options.logging, email, sms, store);
+
+        return {
+            sendEmail: (message) => {
+                const [subject, body] = formatMessageForEmail(message);
+                return emailSend(email, subject, body);
+            },
+            sendSMS: (message) => {
+                const body = formatMessageForText(message);
+                return smsSend(sms, body);
+            },
+            storeMessage: (message) => {
+                return store.store('messages', 'default', message);
+            },
+            logEvent: (level, msg, meta = {}) => {
+                return new Promise((fulfill, reject) => {
+                    logging.log(level, msg, meta, (err) => {
+                        err ? reject(err) : fulfill();
+                    });
+                });
+            }
         };
     });
 };

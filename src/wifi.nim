@@ -125,19 +125,18 @@ proc getSize(): int =
     """.}
 
 
-var receiv : bool = false
-
 proc sent_cb(arg: pointer) {.exportc, section : ROM.} =
     discard
 
 
-proc received*(): bool =
-    return receiv
+var recvBuffer* : array[512, byte]
+var hasPacket* : bool
 
 
 proc recv_cb(arg: pointer; data: pointer; len: uint16) {.exportc, section : ROM.} =
     debug("Received packet!")
-    receiv = true
+    copyMem(addr(recvBuffer), data, len);
+    hasPacket = true
 
 
 
