@@ -1,0 +1,29 @@
+PACKET {
+    4 bytes HEADER
+    n bytes PAYLOAD
+    16 bytes [AUTH]
+}
+
+HEADER {
+    1 byte endianness BOM
+    2 bits protocol version
+    2 bits packet source
+    4 bits protocol flags
+    2 bytes message type
+}
+
+PAYLOAD {
+    n bytes binary data
+}
+
+AUTH {
+    6 bytes random bytes
+    10 bytes HMAC-SHA-256 fingerprint of HEADER + PAYLOAD + random bytes
+}
+
+PROTOCOL FLAGS [
+ bit 0: AUTHENTICATED: AUTH field is present
+ bit 1: EMERGENCY: abnormal event detected
+ bit 2: (unused)
+ bit 3: VIRTUALIZATION: this is a virtualization message
+]

@@ -39,20 +39,13 @@ const main = (config) => Promise.all([
 
     {
         var time = 0;
-        var off = false;
 
         setInterval(() => {
             time += 1;
 
             var duty;
 
-            if (off) {
-                duty = 0;
-            } else {
-                duty = Math.floor((0.5 * Math.sin(time * 0.01) + 0.5) * 2200);
-            }
-
-            off = !off;
+            duty = Math.floor((0.5 * Math.sin(time * 0.1) + 0.5) * 44444);
 
             backend.send({
                 duty: duty

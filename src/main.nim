@@ -52,6 +52,7 @@ proc os_delay_us(n: int) {.importc: "ets_delay_us", header: "<osapi.h>".}
 
 proc uart_init(x, y: int) {. importc: "uart_init" .}
 
+proc system_adc_read(): uint16 {. importc .}
 
 type
   ETSSignal* = uint32
@@ -134,7 +135,7 @@ proc user_procTask(events: ptr ETSEvent) {. section: ROM, exportc: "user_procTas
         var buf: array[150,byte]
 
         x.x = wifi.getIP()
-        x.y = mcu.getVCC()
+        x.y = system_adc_read()
         x.num = 4.4521
         x.num2 = -0.25451
         x.nested.z = uint32(mcu.rtcTime())
@@ -161,7 +162,7 @@ proc user_procTask(events: ptr ETSEvent) {. section: ROM, exportc: "user_procTas
 
 
 proc main() {. section: ROM .} =
-    uart_init(9600, 9600)
+    uart_init(57600, 57600)
 
     debug("Hello from ESP8266!!!")
 
@@ -192,7 +193,7 @@ proc main() {. section: ROM .} =
 
     gpio.set(1 shl 5, 0, 1 shl 5, 0)
 
-    var period = 100'u32  # 1 / us
+    var period = 2000'u32  # 1 / us
     var duty : array[1, uint32] = [1000'u32]
 
     var PWM_0_OUT_IO_MUX = uint32(0x60000800 + 0x38)
