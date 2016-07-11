@@ -30,7 +30,7 @@ const setup = (options) => {
         /* TODO: move this to individual endpoints */
         /* and also report failure somehow? */
 
-        require('express-ws')(app, frontend.server);
+        const wsInstance = require('express-ws')(app, frontend.server);
 
         app.use('/', express.static(options.rootDir));
 
@@ -49,7 +49,14 @@ const setup = (options) => {
         });
 
         frontend.server.listen(options.port, options.address, () => {
-            fulfill(frontend);
+            fulfill({
+                pushMessage: (message) => {
+                    wsInstance.getWss().clients.forEach((client) => {
+                        console.log("Sending!");
+                        client.send(JSON.stringify(message));
+                    });
+                }
+            });
         });
     });
 };

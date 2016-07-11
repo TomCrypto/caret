@@ -1,0 +1,13 @@
+Device virtualization protocol
+------------------------------
+
+ - Any virtualization messages get a VIRTUALIZATION protocol flag for easy detection and filtering.
+
+Protocol (within the message):
+
+LIST OF [
+    2-byte unique device ID (sensor if inbound to MCU, actuator otherwise)
+    N 32-bit floating-point values, where N is fixed based on the device ID
+]
+
+The idea is to benefit from WiFi's large packet frames in order to manage many virtualized devices as once without swamping the microcontroller with too many packets to process.

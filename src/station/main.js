@@ -26,7 +26,7 @@ const main = (config) => Promise.all([
 
         // then implement rules such as: if message.flags has emergency, log as emerg, otherwise log as info?
 
-        // TODO: send message to front-end
+        frontend.pushMessage(message);
 
         console.log(message);
     });

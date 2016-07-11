@@ -24,7 +24,7 @@ main =
 
 type MessageSource = WiFi | Satellite | GPRS | Radio
 
-type MessageType = TestMessage | FaultMessage
+type MessageType = TestMessage | FaultMessage | PulseWidthMessage
 
 
 
@@ -33,6 +33,7 @@ messageTypeToString t =
     case t of
         TestMessage  -> "TestMessage"
         FaultMessage -> "FaultMessage"
+        PulseWidthMessage -> "PulseWidthMessage"
 
 
 
@@ -87,9 +88,10 @@ decodeMessageSource str =
 decodeMessageType : String -> MessageType
 decodeMessageType str =
     case str of
-        "TestMessage"  -> TestMessage
-        "FaultMessage" -> FaultMessage
-        otherwise      -> Debug.crash("Bad message type!")
+        "TestMessage"       -> TestMessage
+        "FaultMessage"      -> FaultMessage
+        "PulseWidthMessage" -> PulseWidthMessage
+        otherwise           -> Debug.crash("Bad message type!")
 
 
 type alias MessageHeader = { source: String, received: Date, mtype: String }
@@ -104,7 +106,7 @@ unpackOk res =
 
 decodeHeader : String -> (MessageSource, Date, MessageType)
 decodeHeader str =
-    let header = unpackOk (decodeString (object3 MessageHeader ("origin" := string) ("received" := date) ("type" := string)) str)
+    let header = unpackOk (decodeString (object3 MessageHeader ("source" := string) ("received" := date) ("type" := string)) str)
     in (decodeMessageSource (.source header), .received header, decodeMessageType (.mtype header))
 
 
@@ -132,7 +134,7 @@ update msg {messages} =
 
 subscriptions : Model -> Sub Msg
 subscriptions model =
-  WebSocket.listen "ws://localhost:8080" NewMessage
+  WebSocket.listen "ws://localhost:3000/messages/realtime" NewMessage
 
 
 
@@ -146,10 +148,10 @@ messageLayout msg =
                 tr [] [
                     td [class "message-source-icon-col"] [
                         case (.source msg) of
-                            WiFi -> img [src "icons/wifi.png"] []
-                            Satellite -> img [src "icons/satellite.png"] []
-                            GPRS -> img [src "icons/gprs.png"] []
-                            Radio -> img [src "icons/radio.png"] []
+                            WiFi -> img [src "media/wifi.png"] []
+                            Satellite -> img [src "media/satellite.png"] []
+                            GPRS -> img [src "media/gprs.png"] []
+                            Radio -> img [src "media/radio.png"] []
                     ],
                     td [class "message-received-date-col"] [
                         text (format "%Y-%m-%d %H:%M:%S" (.received msg))
